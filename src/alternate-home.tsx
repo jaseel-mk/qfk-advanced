@@ -1,0 +1,28 @@
+import {ArrowRight,ChevronRight,Clock,MapPin,Menu,Play,ShieldCheck,Trophy,Users,Zap} from 'lucide-react';
+
+export function AlternateHome({onEnter,onOriginal}:{onEnter:()=>void,onOriginal:()=>void}){
+ return <div className="alt">
+  <div className="alt-topline"><span>Qatar’s independent football community</span><button onClick={onOriginal}>View original design ↗</button></div>
+  <header className="alt-nav"><button className="alt-brand" aria-label="QFK home"><span className="alt-monogram">QFK</span><span>QATAR FOOTBALL<br/>KOOTTAM</span></button><nav><a href="#alt-matches">Matches</a><a href="#alt-community">Community</a><a href="#alt-team">Qatar United FC</a><a href="#alt-story">Our story</a></nav><button className="alt-member" onClick={onEnter}>Member portal <ArrowRight/></button><button className="alt-menu" aria-label="Open menu"><Menu/></button></header>
+
+  <main>
+   <section className="alt-hero">
+    <div className="alt-score-strip"><span>THIS WEEK AT QFK</span><b>FRIDAY NIGHT FOOTBALL</b><i>11 SEP · 8:00 PM · AL SADD</i></div>
+    <div className="alt-hero-copy"><span className="alt-kicker">EST. IN QATAR · BUILT BY THE COMMUNITY</span><h1>THE GAME<br/>IS <em>OURS.</em></h1><p>A football community for everyone who shows up—for the match, for the friendship, and for the moments after the final whistle.</p><div className="alt-actions"><button onClick={onEnter}>JOIN THE NEXT MATCH <ArrowRight/></button><a href="#alt-story"><Play/> WATCH OUR STORY</a></div></div>
+    <div className="alt-hero-visual" aria-hidden="true"><div className="alt-big-ball">⚽</div><strong>PLAY<br/>CONNECT<br/>GROW</strong><span className="alt-orbit one">DOHA · QATAR</span><span className="alt-orbit two">SINCE 2019</span></div>
+    <div className="alt-hero-foot"><span><b>240+</b> COMMUNITY MEMBERS</span><span><b>128</b> MATCHES PLAYED</span><span><b>742</b> GOALS SCORED</span><span><b>12</b> TOURNAMENTS</span></div>
+   </section>
+
+   <section className="alt-next" id="alt-matches"><div className="alt-side-title"><span>01</span><h2>NEXT<br/>ON THE<br/>PITCH</h2><p>Every week. Different teams.<br/>One community.</p></div><article className="alt-match-card"><header><span className="alt-live">REGISTRATION OPEN</span><span>MATCH #128</span></header><div className="alt-match-main"><div className="alt-date"><b>11</b><span>SEP<br/>FRI</span></div><div><small>COMMUNITY MATCH</small><h3>FRIDAY NIGHT<br/>FOOTBALL</h3></div></div><div className="alt-match-meta"><span><Clock/>8:00—10:00 PM</span><span><MapPin/>AL SADD SPORTS CLUB</span></div><footer><div><span>14 / 16 PLAYERS</span><div className="alt-capacity"><i/></div></div><button onClick={onEnter}>CLAIM A SPOT <ArrowRight/></button></footer></article><div className="alt-upcoming"><span>UP NEXT</span><article><div><b>18</b><small>SEP</small></div><p><b>QFK FRIDAY NIGHT</b><span>Doha Sports Park · 8:30 PM</span></p><ChevronRight/></article><article><div><b>25</b><small>SEP</small></div><p><b>COMMUNITY MATCH #130</b><span>Venue to be announced</span></p><ChevronRight/></article><button>VIEW ALL FIXTURES <ArrowRight/></button></div></section>
+
+   <section className="alt-manifesto" id="alt-story"><span className="alt-vertical">MORE THAN FOOTBALL</span><div><p>“What started as a Friday kickabout became a place where hundreds of people found their team.”</p><div className="alt-rule"/><footer><span>ALL SKILL LEVELS</span><span>WEEKLY MATCHES</span><span>REAL COMMUNITY</span></footer></div></section>
+
+   <section className="alt-community" id="alt-community"><header><span>02 · THE COMMUNITY</span><h2>EVERYONE HAS<br/>A PLACE <em>HERE.</em></h2></header><div className="alt-community-grid"><article className="maroon"><Users/><span>FOR THE REGULARS</span><h3>YOUR GAME.<br/>EVERY WEEK.</h3><p>Easy registration, balanced teams, attendance and personal stats—all in one place.</p><button onClick={onEnter}>MEMBER PORTAL <ArrowRight/></button></article><article className="black"><Zap/><span>FOR THE ORGANIZERS</span><h3>LESS ADMIN.<br/>MORE FOOTBALL.</h3><p>Run registration, teams, payments, attendance and live score from the Match Command Center.</p><button onClick={onEnter}>COMMAND CENTER <ArrowRight/></button></article><article className="cream"><Trophy/><span>FOR THE COMPETITORS</span><h3>REPRESENT<br/>THE COMMUNITY.</h3><p>Tournament squads, competitive fixtures and a clear pathway into Qatar United FC.</p><a href="#alt-team">MEET THE TEAM <ArrowRight/></a></article></div></section>
+
+   <section className="alt-team" id="alt-team"><div className="alt-team-shield"><span>QU</span><b>FC</b><small>QATAR UNITED<br/>FOOTBALL CLUB</small></div><div className="alt-team-copy"><span>THE COMPETITIVE SIDE OF QFK</span><h2>QATAR<br/>UNITED FC</h2><p>Our official competitive team—selected from the QFK community and representing our football, our friendships and our standards across Qatar.</p><button>EXPLORE THE SQUAD <ArrowRight/></button></div><div className="alt-record"><span>2026 RECORD</span><div><b>7</b><small>PLAYED</small></div><div><b>4</b><small>WON</small></div><div><b>18</b><small>GOALS</small></div><ShieldCheck/></div></section>
+
+   <section className="alt-join"><div><span>NEXT MATCH · 11 SEPTEMBER</span><h2>YOUR PLACE<br/>IS ON THE <em>PITCH.</em></h2></div><button onClick={onEnter}>JOIN QFK TODAY <ArrowRight/></button><div className="alt-join-ball">⚽</div></section>
+  </main>
+  <footer className="alt-footer"><div className="alt-monogram">QFK</div><div><b>QATAR FOOTBALL KOOTTAM</b><p>Football · Friendship · Community<br/>Proudly built in Qatar</p></div><nav><a>Instagram</a><a>Contact</a><a>Privacy</a></nav><span>© 2026 QFK</span></footer>
+ </div>
+}
