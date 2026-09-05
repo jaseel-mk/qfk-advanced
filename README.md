@@ -9,7 +9,7 @@ A production-oriented foundation for Qatar Football Koottam: a public community 
 - Match Command Center overview and registration views
 - Java 21 Spring Boot feature-first backend foundation
 - PostgreSQL/Flyway multi-team data model
-- Pessimistic-lock registration foundation to prevent final-slot overbooking
+- Pessimistic-lock registration foundation to prevent final-slot overbooking   
 - Central API validation errors and deny-by-default Spring Security
 - Docker images, Compose stack and environment template
 
