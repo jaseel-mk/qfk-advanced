@@ -1,0 +1,24 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: qfk
+      POSTGRES_USER: ${DATABASE_USERNAME:-qfk}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-qfk_dev_only}
+    volumes: [qfk_data:/var/lib/postgresql/data]
+    healthcheck: {test: [CMD-SHELL, "pg_isready -U qfk"], interval: 5s, timeout: 5s, retries: 10}
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/qfk
+      DATABASE_USERNAME: ${DATABASE_USERNAME:-qfk}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-qfk_dev_only}
+      JWT_SECRET: ${JWT_SECRET:-development-only-secret-must-change}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+    depends_on: {db: {condition: service_healthy}}
+    ports: ["8080:8080"]
+  frontend:
+    build: .
+    depends_on: [backend]
+    ports: ["5173:80"]
+volumes: {qfk_data: {}}
