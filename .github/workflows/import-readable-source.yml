@@ -1,6 +1,7 @@
 name: Import complete readable source
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - complete-source.tar.gz
@@ -15,7 +16,9 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v5
       - name: Extract complete source tree
-        run: tar -xzf complete-source.tar.gz
+        run: |
+          tar -xzf complete-source.tar.gz
+          git restore .github
       - name: Commit readable files
         run: |
           git config user.name "github-actions[bot]"
@@ -25,3 +28,4 @@ jobs:
             git commit -m "feat: publish complete readable source"
             git push
           fi
+  
