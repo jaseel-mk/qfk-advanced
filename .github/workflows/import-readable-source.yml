@@ -1,0 +1,27 @@
+name: Import complete readable source
+
+on:
+  push:
+    paths:
+      - complete-source.tar.gz
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+      - name: Extract complete source tree
+        run: tar -xzf complete-source.tar.gz
+      - name: Commit readable files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -m "feat: publish complete readable source"
+            git push
+          fi
