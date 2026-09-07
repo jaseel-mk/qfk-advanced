@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/qfk}
+    username: ${DATABASE_USERNAME:qfk}
+    password: ${DATABASE_PASSWORD:qfk_dev_only}
+  jpa:
+    open-in-view: false
+    hibernate.ddl-auto: validate
+  flyway.enabled: true
+server:
+  port: ${PORT:8080}
+  error.include-stacktrace: never
+  tomcat.max-http-form-post-size: 2MB
+qfk:
+  timezone: Asia/Qatar
+  jwt-secret: ${JWT_SECRET:development-only-secret-must-be-replaced-before-production}

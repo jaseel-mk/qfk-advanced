@@ -9,7 +9,7 @@ A production-oriented foundation for Qatar Football Koottam: a public community 
 - Match Command Center overview and registration views
 - Java 21 Spring Boot feature-first backend foundation
 - PostgreSQL/Flyway multi-team data model
-- Pessimistic-lock registration foundation to prevent final-slot overbooking   
+- Pessimistic-lock registration foundation to prevent final-slot overbooking
 - Central API validation errors and deny-by-default Spring Security
 - Docker images, Compose stack and environment template
 
@@ -81,8 +81,14 @@ IMPLEMENTATION_ASSESSMENT.md Architecture and migration assessment
 
 Use the supplied images behind HTTPS. Configure `DATABASE_URL`, `DATABASE_USERNAME`, `DATABASE_PASSWORD`, `JWT_SECRET` and `FRONTEND_URL` through your deployment platform's secret manager. Run Flyway automatically with one backend instance before scaling application replicas. Back up PostgreSQL and test restoration before launch.
 
-## Next milestone
+## Phase 2 API
 
-Finish JWT access/refresh rotation, persistent users/roles, DTO-based endpoints, frontend API adapters and security tests. Then proceed with Phase 2 match creation, registration/waitlist history, payments and attendance.
+Phase 2 adds database-backed user accounts, BCrypt passwords, JWT access tokens,
+rotating hashed refresh tokens, role-based authorization, match creation and listing,
+concurrency-safe registration/waitlists, payment status, attendance status and a typed
+frontend API client. Apply Flyway migrations V1 and V2 before starting the backend.
+
+Authentication endpoints are under `/api/auth`; operational match endpoints are under
+`/api/matches`. Set `VITE_API_URL` to the deployed backend API URL for production.
 
 Suggested commit: `feat: establish qfk platform foundation and command center`
