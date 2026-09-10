@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://qfk-api.onrender.com/api';
 
 export type Session = {accessToken:string;refreshToken:string;expiresIn:number;role:string;memberId:string};
 export type Match = {id:string;matchNumber:number;title:string;type:string;status:string;startsAt:string;endsAt:string;venue:string;maximumPlayers:number;registrationFee:number;currency:string;confirmedPlayers:number};
