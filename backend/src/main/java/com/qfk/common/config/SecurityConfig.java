@@ -13,9 +13,9 @@ import java.nio.charset.StandardCharsets;import java.security.MessageDigest;impo
   origins.add("http://localhost:5173");
   origins.add("http://127.0.0.1:5173");
   var c=new CorsConfiguration();
-  c.setAllowedOriginPatterns(new java.util.ArrayList<>(origins));
+  c.setAllowedOrigins(new java.util.ArrayList<>(origins));
   c.setAllowedMethods(java.util.List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
-  c.setAllowedHeaders(java.util.List.of("Authorization","Content-Type","Accept"));
+  c.setAllowedHeaders(java.util.List.of("*"));
   c.setExposedHeaders(java.util.List.of("Location"));
   c.setMaxAge(3600L);
   var source=new UrlBasedCorsConfigurationSource();source.registerCorsConfiguration("/**",c);return source;

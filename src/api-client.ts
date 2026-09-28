@@ -15,6 +15,8 @@ async function request<T>(path:string, options:RequestInit={}):Promise<T>{
 export const api={
  async register(fullName:string,email:string,password:string){session=await request<Session>('/auth/register',{method:'POST',body:JSON.stringify({fullName,email,password})});localStorage.setItem('qfk-session',JSON.stringify(session));return session;},
  async login(email:string,password:string){session=await request<Session>('/auth/login',{method:'POST',body:JSON.stringify({email,password})});localStorage.setItem('qfk-session',JSON.stringify(session));return session;},
+ async forgotPassword(email:string){return request<void>('/auth/forgot-password',{method:'POST',body:JSON.stringify({email})});},
+ async resetPassword(token:string,password:string){return request<void>('/auth/reset-password',{method:'POST',body:JSON.stringify({token,password})});},
  logout(){session=null;localStorage.removeItem('qfk-session');},
  getSession(){return session;},
  matches(){return request<Match[]>('/matches');},
