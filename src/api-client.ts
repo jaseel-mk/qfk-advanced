@@ -9,7 +9,8 @@ async function request<T>(path:string, options:RequestInit={}):Promise<T>{
  const headers=new Headers(options.headers);headers.set('Content-Type','application/json');if(session)headers.set('Authorization',`Bearer ${session.accessToken}`);
  const response=await fetch(`${API_URL}${path}`,{...options,headers});
  if(!response.ok){const problem=await response.json().catch(()=>({message:'Request failed'}));throw new Error(problem.message ?? `Request failed (${response.status})`);}
- return response.status===204?undefined as T:response.json();
+ const responseText=await response.text();
+ return responseText?JSON.parse(responseText) as T:undefined as T;
 }
 
 export const api={
