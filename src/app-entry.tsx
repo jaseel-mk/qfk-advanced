@@ -11,7 +11,7 @@ type View='public'|'matches'|'login'|'member'|'admin'|'command';
 const players=[['1','Jaseel Kareem','Midfielder','Experienced','PAID','PRESENT'],['2','Fasil Rahman','Striker','Experienced','PAID','PRESENT'],['3','Nashid Ali','Centre Back','Intermediate','PAID','—'],['4','Shameer K','Goalkeeper','Experienced','UNPAID','—'],['5','Ashiq P','Right Wing','Intermediate','PAID','—'],['6','Riyas M','Left Back','Intermediate','UNPAID','—']];
 const games=[{day:'FRI',date:'11 SEP',title:'Friday Community Match #128',meta:'8:00 PM · Al Sadd Sports Club',slots:'14 / 16',tone:'open'},{day:'FRI',date:'18 SEP',title:'QFK Friday Night Football',meta:'8:30 PM · Doha Sports Park',slots:'Registration soon',tone:'soon'}];
 
-function Brand(){return <button className="brand" onClick={()=>location.hash=''}><span className="crest">Q</span><span><b>QFK</b><small>QATAR FOOTBALL KOOTTAM</small></span></button>}
+function Brand(){return <button className="brand" onClick={()=>location.hash=''}><img className="brand-crest" src={`${import.meta.env.BASE_URL}qfk-crest.png`} alt="QFK eagle crest"/><span><b>QFK</b><small>QATAR FOOTBALL KOOTTAM</small></span></button>}
 function App(){const resetToken=new URLSearchParams(location.search).get('resetToken')??'';const [view,setView]=useState<View>(location.pathname==='/alternate'?'alternate' as View:resetToken?'login':'public'); const [menu,setMenu]=useState(false); const [tab,setTab]=useState('Overview'); const [session,setSession]=useState<Session|null>(api.getSession());
  if((view as string)==='alternate') return <AlternateHome onEnter={()=>setView('member')} onOriginal={()=>{history.pushState({},'', '/');setView('public')}}/>;
  if(view==='public') return <Public onMatches={()=>setView('matches')} onLogin={()=>setView('login')}/>;
