@@ -7,10 +7,15 @@ let session: Session|null = JSON.parse(localStorage.getItem('qfk-session') ?? 'n
 
 async function request<T>(path:string, options:RequestInit={}):Promise<T>{
  const headers=new Headers(options.headers);headers.set('Content-Type','application/json');if(session)headers.set('Authorization',`Bearer ${session.accessToken}`);
- const response=await fetch(`${API_URL}${path}`,{...options,headers});
+ const controller=new AbortController();
+ const timer=setTimeout(()=>controller.abort(),150000);
+ try{
+ const response=await fetch(`${API_URL}${path}`,{...options,headers,signal:controller.signal});
  if(!response.ok){const problem=await response.json().catch(()=>({message:'Request failed'}));throw new Error(problem.message ?? `Request failed (${response.status})`);}
  const responseText=await response.text();
  return responseText?JSON.parse(responseText) as T:undefined as T;
+ }catch(error){if(controller.signal.aborted)throw new Error('The server took too long to respond. Please try again shortly.');throw error;}
+ finally{clearTimeout(timer);}
 }
 
 export const api={
