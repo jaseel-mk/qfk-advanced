@@ -3,7 +3,7 @@ import {ArrowRight,ChevronRight,Clock,MapPin,Menu,Play,ShieldCheck,Trophy,Users,
 export function AlternateHome({onEnter,onOriginal}:{onEnter:()=>void,onOriginal:()=>void}){
  return <div className="alt">
   <div className="alt-topline"><span>Qatar’s independent football community</span><button onClick={onOriginal}>View original design ↗</button></div>
-  <header className="alt-nav"><button className="alt-brand" aria-label="QFK home"><span className="alt-monogram">QFK</span><span>QATAR FOOTBALL<br/>KOOTTAM</span></button><nav><a href="#alt-matches">Matches</a><a href="#alt-community">Community</a><a href="#alt-team">Qatar United FC</a><a href="#alt-story">Our story</a></nav><button className="alt-member" onClick={onEnter}>Member portal <ArrowRight/></button><button className="alt-menu" aria-label="Open menu"><Menu/></button></header>
+  <header className="alt-nav"><button className="alt-brand" aria-label="QFK home"><img className="brand-crest" src={`${import.meta.env.BASE_URL}qfk-crest.png`} alt="QFK eagle crest"/><span>QATAR FOOTBALL<br/>KOOTTAM</span></button><nav><a href="#alt-matches">Matches</a><a href="#alt-community">Community</a><a href="#alt-team">Qatar United FC</a><a href="#alt-story">Our story</a></nav><button className="alt-member" onClick={onEnter}>Member portal <ArrowRight/></button><button className="alt-menu" aria-label="Open menu"><Menu/></button></header>
 
   <main>
    <section className="alt-hero">
@@ -23,6 +23,6 @@ export function AlternateHome({onEnter,onOriginal}:{onEnter:()=>void,onOriginal:
 
    <section className="alt-join"><div><span>NEXT MATCH · 11 SEPTEMBER</span><h2>YOUR PLACE<br/>IS ON THE <em>PITCH.</em></h2></div><button onClick={onEnter}>JOIN QFK TODAY <ArrowRight/></button><div className="alt-join-ball">⚽</div></section>
   </main>
-  <footer className="alt-footer"><div className="alt-monogram">QFK</div><div><b>QATAR FOOTBALL KOOTTAM</b><p>Football · Friendship · Community<br/>Proudly built in Qatar</p></div><nav><a>Instagram</a><a>Contact</a><a>Privacy</a></nav><span>© 2026 QFK</span></footer>
+  <footer className="alt-footer"><img className="brand-crest" src={`${import.meta.env.BASE_URL}qfk-crest.png`} alt="QFK eagle crest"/><div><b>QATAR FOOTBALL KOOTTAM</b><p>Football · Friendship · Community<br/>Proudly built in Qatar</p></div><nav><a>Instagram</a><a>Contact</a><a>Privacy</a></nav><span>© 2026 QFK</span></footer>
  </div>
 }
