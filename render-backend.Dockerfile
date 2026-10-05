@@ -1,7 +1,7 @@
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /source
 COPY backend ./backend
-RUN cd backend && mvn -q -DskipTests package
+RUN cd backend && mvn -q package
 
 FROM eclipse-temurin:21-jre
 RUN useradd -r qfk

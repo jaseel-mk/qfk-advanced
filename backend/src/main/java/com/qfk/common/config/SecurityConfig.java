@@ -3,8 +3,8 @@ import java.nio.charset.StandardCharsets;import java.security.MessageDigest;impo
 @Configuration @EnableMethodSecurity public class SecurityConfig {
  @Bean PasswordEncoder passwordEncoder(){return new BCryptPasswordEncoder(12);}
  private SecretKeySpec key(String secret)throws Exception{return new SecretKeySpec(MessageDigest.getInstance("SHA-256").digest(secret.getBytes(StandardCharsets.UTF_8)),"HmacSHA256");}
- @Bean JwtEncoder jwtEncoder(@Value("${qfk.jwt-secret}") String secret)throws Exception{var jwk=new OctetSequenceKey.Builder(key(secret)).algorithm(JWSAlgorithm.HS256).build();return new NimbusJwtEncoder(new ImmutableJWKSet<SecurityContext>(new JWKSet(jwk)));}
- @Bean JwtDecoder jwtDecoder(@Value("${qfk.jwt-secret}") String secret)throws Exception{return NimbusJwtDecoder.withSecretKey(key(secret)).macAlgorithm(MacAlgorithm.HS256).build();}
+ @Bean public JwtEncoder jwtEncoder(@Value("${qfk.jwt-secret}") String secret)throws Exception{var jwk=new OctetSequenceKey.Builder(key(secret)).algorithm(JWSAlgorithm.HS256).build();return new NimbusJwtEncoder(new ImmutableJWKSet<SecurityContext>(new JWKSet(jwk)));}
+ @Bean public JwtDecoder jwtDecoder(@Value("${qfk.jwt-secret}") String secret)throws Exception{return NimbusJwtDecoder.withSecretKey(key(secret)).macAlgorithm(MacAlgorithm.HS256).build();}
  @Bean CorsConfigurationSource corsConfigurationSource(@Value("${FRONTEND_URL:http://localhost:5173}") String configuredFrontends){
   var origins=new java.util.LinkedHashSet<String>();
   for(String origin:configuredFrontends.split(",")){String clean=origin.trim().replaceAll("/+$","");if(!clean.isBlank())origins.add(clean);}
