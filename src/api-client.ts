@@ -6,12 +6,12 @@ export type Match = {id:string;matchNumber:number;title:string;type:string;statu
 let session: Session|null = JSON.parse(localStorage.getItem('qfk-session') ?? 'null');
 
 async function request<T>(path:string, options:RequestInit={}):Promise<T>{
- const headers=new Headers(options.headers);headers.set('Content-Type','application/json');if(session)headers.set('Authorization',`Bearer ${session.accessToken}`);
+ const headers=new Headers(options.headers);headers.set('Content-Type','application/json');if(session && !path.startsWith('/auth/'))headers.set('Authorization',`Bearer ${session.accessToken}`);
  const controller=new AbortController();
  const timer=setTimeout(()=>controller.abort(),150000);
  try{
  const response=await fetch(`${API_URL}${path}`,{...options,headers,signal:controller.signal});
- if(!response.ok){const problem=await response.json().catch(()=>({message:'Request failed'}));throw new Error(problem.message ?? `Request failed (${response.status})`);}
+ if(!response.ok){const problem=await response.json().catch(()=>({message:response.status===401?'Your session expired. Please log in again.':response.status===403?'Access was denied. Please log in again.':`Request failed (${response.status})`}));throw new Error(problem.message ?? `Request failed (${response.status})`);}
  const responseText=await response.text();
  return responseText?JSON.parse(responseText) as T:undefined as T;
  }catch(error){if(controller.signal.aborted)throw new Error('The server took too long to respond. Please try again shortly.');throw error;}
