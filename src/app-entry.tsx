@@ -7,23 +7,26 @@ import {AlternateHome} from './alternate-home';
 import './alternate-home.css';
 import {api,type Match,type Session} from './api-client';
 import {CommandCenter,canManageMatches} from './command-center';
+import {Operations,sections,type Section} from './operations';
 
-type View='public'|'matches'|'login'|'member'|'admin'|'command';
+type View='public'|'matches'|'login'|'member'|'admin'|'command'|'operations';
 const games=[{day:'FRI',date:'11 SEP',title:'Friday Community Match #128',meta:'8:00 PM · Al Sadd Sports Club',slots:'14 / 16',tone:'open'},{day:'FRI',date:'18 SEP',title:'QFK Friday Night Football',meta:'8:30 PM · Doha Sports Park',slots:'Registration soon',tone:'soon'}];
 
 function Brand({onHome}:{onHome?:()=>void}){return <button className="brand" onClick={onHome??(()=>location.hash='')}><img className="brand-crest" src={`${import.meta.env.BASE_URL}qfk-crest.png`} alt="QFK eagle crest"/><span><b>QFK</b><small>QATAR FOOTBALL KOOTTAM</small></span></button>}
 function App(){const resetToken=new URLSearchParams(location.search).get('resetToken')??'';const [view,setView]=useState<View>(location.pathname==='/alternate'?'alternate' as View:resetToken?'login':'public'); const [menu,setMenu]=useState(false); const [session,setSession]=useState<Session|null>(api.getSession());
+ const [section,setSection]=useState<Section>('Matches');
  useEffect(()=>{const sync=()=>setSession(api.getSession());window.addEventListener('qfk-session-changed',sync);return ()=>window.removeEventListener('qfk-session-changed',sync)},[]);
  if((view as string)==='alternate') return <AlternateHome onEnter={()=>setView('member')} onOriginal={()=>{history.pushState({},'', '/');setView('public')}}/>;
  if(view==='public') return <Public session={session} onMatches={()=>setView('matches')} onLogin={()=>setView(session?'matches':'login')}/>;
  if(view==='login') return <AuthScreen resetToken={resetToken} onBack={()=>setView('public')} onAuthenticated={s=>{setSession(s);setView('matches')}}/>;
- if(view==='matches') return <MatchesScreen session={session} onBack={()=>setView('public')} onLogin={()=>setView('login')} onMember={()=>setView('member')} onCommand={()=>setView('command')}/>;
+ if(view==='matches') return <MatchesScreen session={session} onBack={()=>setView('public')} onLogin={()=>setView('login')} onMember={()=>{setSection('Matches');setView('operations')}} onCommand={()=>setView('command')}/>;
+ if(view==='operations')return <Operations session={session} section={section} onSection={setSection} brand={<Brand onHome={()=>setView('public')}/>} onHome={()=>setView('public')} onLogin={()=>setView('login')}/>;
  if(view==='command')return <CommandCenter session={session} brand={<Brand onHome={()=>setView('public')}/>} onBack={()=>setView('matches')}/>;
  return <div className="app-shell">
   <aside className={menu?'sidebar open':'sidebar'}><div className="side-top"><Brand onHome={()=>setView('public')}/><button className="icon-btn mobile" onClick={()=>setMenu(false)}><X/></button></div><nav>
    <Nav icon={<LayoutDashboard/>} label="Dashboard" active={view==='admin'||view==='member'} onClick={()=>setView(view==='member'?'member':'admin')}/>
    <Nav icon={<Goal/>} label="Command Center" active={false} badge="LIVE" onClick={()=>setView('command')}/>
-   {['Matches','Members','Teams','Tournaments','Finance','Statistics','Polls','Announcements'].map((x,i)=><Nav key={x} icon={[<CalendarDays/>,<Users/>,<Shield/>,<Trophy/>,<Wallet/>,<Activity/>,<CheckCircle2/>,<Bell/>][i]} label={x}/>)}
+   {sections.map((x,i)=><Nav key={x} icon={[<CalendarDays/>,<Users/>,<Shield/>,<Trophy/>,<Wallet/>,<Activity/>,<CheckCircle2/>,<Bell/>][i]} label={x} onClick={()=>{setSection(x);setView('operations')}}/>)}
   </nav><div className="profile"><div className="avatar">JK</div><div><b>Jaseel K.</b><small>Super Admin</small></div><MoreHorizontal/></div></aside>
   <main><header className="topbar"><button className="icon-btn mobile" onClick={()=>setMenu(true)}><Menu/></button><div className="search"><Search/><span>Search QFK…</span><kbd>⌘ K</kbd></div><div className="top-actions"><button className="icon-btn"><Bell/><i/></button><button className="ghost" onClick={()=>{api.logout();setSession(null);setView('public')}}><LogOut/> <span>Sign out</span></button></div></header>
   {view==='member'?<Member onCommand={()=>setView('command')}/>:<Admin onCommand={()=>setView('command')}/>}</main>
