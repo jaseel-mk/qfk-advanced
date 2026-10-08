@@ -2,6 +2,7 @@ package com.qfk.common.api;
 import java.time.Instant; import java.util.Map; import java.util.stream.Collectors;
 import org.springframework.http.*; import org.springframework.web.bind.MethodArgumentNotValidException; import org.springframework.web.bind.annotation.*;
 @RestControllerAdvice public class ApiExceptionHandler {
+ @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class) ResponseEntity<ApiError> integrity(org.springframework.dao.DataIntegrityViolationException ex){return ResponseEntity.status(409).body(new ApiError(Instant.now(),409,"CONFLICT","A duplicate or invalid linked record prevents saving this change.",Map.of()));}
  @ExceptionHandler(MethodArgumentNotValidException.class) ResponseEntity<ApiError> validation(MethodArgumentNotValidException ex){var fields=ex.getBindingResult().getFieldErrors().stream().collect(Collectors.toMap(e->e.getField(),e->e.getDefaultMessage()==null?"Invalid value":e.getDefaultMessage(),(a,b)->a));return ResponseEntity.badRequest().body(new ApiError(Instant.now(),400,"VALIDATION_ERROR","Validation failed",fields));}
  @ExceptionHandler(IllegalStateException.class) ResponseEntity<ApiError> conflict(IllegalStateException ex){return ResponseEntity.status(409).body(new ApiError(Instant.now(),409,"CONFLICT",ex.getMessage(),Map.of()));}
  @ExceptionHandler(IllegalArgumentException.class) ResponseEntity<ApiError> badRequest(IllegalArgumentException ex){return ResponseEntity.badRequest().body(new ApiError(Instant.now(),400,"BAD_REQUEST",ex.getMessage(),Map.of()));}
