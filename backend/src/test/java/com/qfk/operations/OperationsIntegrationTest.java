@@ -183,7 +183,7 @@ class OperationsIntegrationTest {
   mvc.perform(get("/api/manage/matches/"+matchId+"/builder").with(as("MEMBER"))).andExpect(status().isForbidden());
  }
  @Test void lineupBuilderRejectsOverCapacityWithoutPartialWrites()throws Exception{
-  var players=new ArrayList<Map<String,Object>>();for(int n=0;n<6;n++){UUID m=UUID.randomUUID(),r=UUID.randomUUID();db.update("INSERT INTO members(id,full_name,joined_on) VALUES(?,'Builder player',current_date)",m);db.update("INSERT INTO match_registrations(id,match_id,member_id,status) VALUES(?,?,?,'CONFIRMED')",r,matchId,m);players.add(Map.of("registrationId",r,"side","HOME","position","UTILITY","starter",true,"x",50,"y",50,"shirtNumber",n+1));}
+  var players=new ArrayList<Map<String,Object>>();for(int n=0;n<6;n++){UUID m=UUID.randomUUID(),r=UUID.randomUUID();db.update("INSERT INTO members(id,full_name,joined_on) VALUES(?,'Builder player',current_date)",m);db.update("INSERT INTO match_registrations(id,match_id,member_id,status,registered_at) VALUES(?,?,?,'CONFIRMED',now())",r,matchId,m);players.add(Map.of("registrationId",r,"side","HOME","position","UTILITY","starter",true,"x",50,"y",50,"shirtNumber",n+1));}
   var body=Map.of("starterLimit",5,"homeName","Home","awayName","Away","homeColor","#801735","awayColor","#475463","players",players);
   mvc.perform(put("/api/manage/matches/"+matchId+"/builder").with(as("ADMIN")).contentType("application/json").content(json.writeValueAsString(body))).andExpect(status().isBadRequest());assertEquals(0,db.queryForObject("SELECT count(*) FROM match_lineups",Integer.class));
  }
