@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @AutoConfigureMockMvc @Transactional
 @EnabledIfEnvironmentVariable(named="QFK_TEST_DATABASE_URL",matches=".+")
 class OperationsIntegrationTest {
- @Autowired MockMvc mvc;@Autowired JdbcTemplate db;@Autowired ObjectMapper json;
+ @Autowired jakarta.persistence.EntityManager em;@Autowired MockMvc mvc;@Autowired JdbcTemplate db;@Autowired ObjectMapper json;
  UUID memberId,userId,matchId;
  @BeforeEach void fixture(){memberId=UUID.randomUUID();userId=UUID.randomUUID();matchId=UUID.randomUUID();db.update("INSERT INTO members(id,full_name,joined_on) VALUES(?,'Test Player',current_date)",memberId);db.update("INSERT INTO user_accounts(id,member_id,email,password_hash,role) VALUES(?,?,?,'unused','ADMIN')",userId,memberId,userId+"@test.invalid");db.update("INSERT INTO matches(id,match_number,title,type,status,starts_at,ends_at,maximum_players,registration_fee,venue) VALUES(?,12345,'Test Match','COMMUNITY_MATCH','REGISTRATION_OPEN',now()+interval '1 day',now()+interval '1 day 2 hours',2,10,'Test ground')",matchId);}
  JwtRequestPostProcessor as(String role){return jwt().jwt(j->j.subject(userId.toString()).claim("memberId",memberId.toString()).claim("role",role)).authorities(new SimpleGrantedAuthority("ROLE_"+role));}
@@ -30,7 +30,7 @@ class OperationsIntegrationTest {
  @Test void memberCannotReadPrivateOrMutateAdminSections()throws Exception{
   mvc.perform(get("/api/operations/members").with(as("MEMBER"))).andExpect(status().isForbidden());
   mvc.perform(get("/api/operations/finance").with(as("ORGANIZER"))).andExpect(status().isForbidden());
-  mvc.perform(post("/api/operations/teams").with(as("MEMBER")).contentType("application/json").content("{}" )).andExpect(status().isForbidden());
+  mvc.perform(post("/api/operations/teams").with(as("MEMBER")).contentType("application/json").content("{\"name\":\"Denied Team\",\"shortName\":\"DEN\",\"description\":\"\",\"foundedOn\":\"2026-10-08\",\"active\":true}")).andExpect(status().isForbidden());
   mvc.perform(get("/api/operations/teams")).andExpect(status().isUnauthorized());
  }
  @Test void memberAndTeamRecordsPersistAndMembershipIsSoftRemoved()throws Exception{
@@ -72,12 +72,12 @@ class OperationsIntegrationTest {
   mvc.perform(get("/api/operations/tournaments/"+t+"/standings").with(as("MEMBER"))).andExpect(jsonPath("$[0].name").value("Team A")).andExpect(jsonPath("$[0].points").value(3)).andExpect(jsonPath("$[1].lost").value(1));
  }
  @Test void matchRegistrationAndPlayerStatisticsPersist()throws Exception{
-  postJson("/api/matches/"+matchId+"/registrations","{}","MEMBER");
+  postJson("/api/matches/"+matchId+"/registrations","{}","MEMBER");em.flush();
   mvc.perform(put("/api/operations/statistics").with(as("ADMIN")).contentType("application/json").content("{\"matchId\":\""+matchId+"\",\"memberId\":\""+memberId+"\",\"goals\":2,\"assists\":1}")).andExpect(status().isOk());
   mvc.perform(get("/api/operations/statistics").with(as("MEMBER"))).andExpect(jsonPath("$[0].goals").value(2));
   var registration=db.queryForObject("SELECT id FROM match_registrations WHERE match_id=?",UUID.class,matchId);
   mvc.perform(delete("/api/matches/registrations/"+registration).with(as("MEMBER"))).andExpect(status().isOk());
-  postJson("/api/matches/"+matchId+"/registrations","{}","MEMBER");
+  postJson("/api/matches/"+matchId+"/registrations","{}","MEMBER");em.flush();
   assertEquals(1,db.queryForObject("SELECT count(*) FROM match_registrations WHERE match_id=?",Integer.class,matchId));
  }
 }
