@@ -3,9 +3,10 @@ import com.qfk.match.entity.*; import com.qfk.match.repository.*; import com.qfk
 @Service public class RegistrationService {private final MatchRepository matches;private final RegistrationRepository registrations;private final EntityManager em; public RegistrationService(MatchRepository m,RegistrationRepository r,EntityManager e){matches=m;registrations=r;em=e;}
  @Transactional public MatchRegistration register(UUID matchId,Member member){
   var match=matches.findByIdForRegistration(matchId).orElseThrow(()->new IllegalArgumentException("Match not found"));
+  requireOpen(match);
   if(!member.active)throw new IllegalStateException("Member is inactive");
   if(match.status!=FootballMatch.MatchStatus.REGISTRATION_OPEN&&match.status!=FootballMatch.MatchStatus.FULL)throw new IllegalStateException("Registration is not open");
-  var r=registrations.findByMatchIdOrderByRegisteredAtAsc(matchId).stream().filter(x->x.member.id.equals(member.id)).findFirst().orElseGet(MatchRegistration::new);
+  var r=registrations.findByMatchIdOrderByRegisteredAtAsc(matchId).stream().filter(x->x.member!=null&&x.member.id.equals(member.id)).findFirst().orElseGet(MatchRegistration::new);
   if(r.id!=null&&(r.status==MatchRegistration.Status.CONFIRMED||r.status==MatchRegistration.Status.WAITLIST))throw new IllegalStateException("Member is already registered");
   long confirmed=registrations.countByMatchIdAndStatus(matchId,MatchRegistration.Status.CONFIRMED);
   r.match=match;r.member=member;r.registeredAt=Instant.now();r.status=confirmed<match.maximumPlayers?MatchRegistration.Status.CONFIRMED:MatchRegistration.Status.WAITLIST;
@@ -13,6 +14,17 @@ import com.qfk.match.entity.*; import com.qfk.match.repository.*; import com.qfk
   r.attendanceStatus=MatchRegistration.AttendanceStatus.NOT_MARKED;
   if(confirmed+1>=match.maximumPlayers)match.status=FootballMatch.MatchStatus.FULL;
   return registrations.save(r);
+ }
+ private void requireOpen(FootballMatch match){if(match.startsAt==null||!match.startsAt.isAfter(Instant.now())||(match.status!=FootballMatch.MatchStatus.REGISTRATION_OPEN&&match.status!=FootballMatch.MatchStatus.FULL))throw new IllegalStateException("Registration is not open");}
+ @Transactional public MatchRegistration registerGuest(UUID matchId,String name,String mobile){
+  var match=matches.findByIdForRegistration(matchId).orElseThrow(()->new IllegalArgumentException("Match not found"));requireOpen(match);
+  String phone=mobile.replaceAll("[\\s()-]","");if(!phone.matches("\\+[1-9][0-9]{6,14}"))throw new IllegalArgumentException("Enter a mobile number with country code, for example +97412345678");
+  String clean=name.trim();if(clean.isBlank())throw new IllegalArgumentException("Guest name is required");
+  var r=registrations.findByMatchIdOrderByRegisteredAtAsc(matchId).stream().filter(x->phone.equals(x.guestMobile)).findFirst().orElseGet(MatchRegistration::new);
+  if(r.id!=null&&(r.status==MatchRegistration.Status.CONFIRMED||r.status==MatchRegistration.Status.WAITLIST))throw new IllegalStateException("This mobile number is already registered for this match");
+  long confirmed=registrations.countByMatchIdAndStatus(matchId,MatchRegistration.Status.CONFIRMED);
+  r.match=match;r.member=null;r.guestName=clean;r.guestMobile=phone;r.registeredAt=Instant.now();r.status=confirmed<match.maximumPlayers?MatchRegistration.Status.CONFIRMED:MatchRegistration.Status.WAITLIST;r.waitlistPosition=r.status==MatchRegistration.Status.WAITLIST?(int)(registrations.countByMatchIdAndStatus(matchId,MatchRegistration.Status.WAITLIST)+1):null;r.attendanceStatus=MatchRegistration.AttendanceStatus.NOT_MARKED;
+  if(confirmed+1>=match.maximumPlayers)match.status=FootballMatch.MatchStatus.FULL;return registrations.save(r);
  }
  @Transactional public void cancel(UUID id){
   var initial=registrations.findById(id).orElseThrow(()->new IllegalArgumentException("Registration not found"));

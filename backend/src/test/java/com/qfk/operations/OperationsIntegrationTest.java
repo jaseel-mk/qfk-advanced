@@ -80,4 +80,23 @@ class OperationsIntegrationTest {
   postJson("/api/matches/"+matchId+"/registrations","{}","MEMBER");em.flush();
   assertEquals(1,db.queryForObject("SELECT count(*) FROM match_registrations WHERE match_id=?",Integer.class,matchId));
  }
+
+ @Test void guestSharesMemberCapacityAndContactIsPrivate()throws Exception{
+  postJson("/api/matches/"+matchId+"/registrations","{}","MEMBER");em.flush();
+  String a=mvc.perform(post("/api/public/matches/"+matchId+"/guests").contentType("application/json").content("{\"fullName\":\"Guest One\",\"mobile\":\"+974 1234 5678\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("CONFIRMED")).andReturn().getResponse().getContentAsString();em.flush();
+  mvc.perform(post("/api/public/matches/"+matchId+"/guests").contentType("application/json").content("{\"fullName\":\"Guest Two\",\"mobile\":\"+97412345679\"}")).andExpect(status().isOk()).andExpect(jsonPath("$.status").value("WAITLIST"));em.flush();
+  mvc.perform(post("/api/public/matches/"+matchId+"/guests").contentType("application/json").content("{\"fullName\":\"Duplicate\",\"mobile\":\"+97412345678\"}")).andExpect(status().isConflict());
+  mvc.perform(get("/api/matches/"+matchId+"/registrations").with(as("MEMBER"))).andExpect(jsonPath("$[1].guestMobile").isEmpty());
+  mvc.perform(get("/api/matches/"+matchId+"/registrations").with(as("ADMIN"))).andExpect(jsonPath("$[1].guestMobile").value("+97412345678"));
+  mvc.perform(delete("/api/matches/registrations/"+id(a)).with(as("MEMBER"))).andExpect(status().isForbidden());
+  mvc.perform(delete("/api/matches/registrations/"+id(a)).with(as("ADMIN"))).andExpect(status().isOk());em.flush();
+  assertEquals("CONFIRMED",db.queryForObject("SELECT status FROM match_registrations WHERE guest_mobile='+97412345679'",String.class));
+ }
+ @Test void guestCannotReadRosterOrJoinClosedMatch()throws Exception{
+  mvc.perform(get("/api/matches/"+matchId+"/registrations")).andExpect(status().isUnauthorized());
+  mvc.perform(get("/api/public/matches")).andExpect(status().isOk()).andExpect(jsonPath("$[0].id").value(matchId.toString()));
+  mvc.perform(post("/api/public/matches/"+matchId+"/guests").contentType("application/json").content("{\"fullName\":\"Guest\",\"mobile\":\"123\"}")).andExpect(status().isBadRequest());
+  db.update("UPDATE matches SET status='REGISTRATION_CLOSED' WHERE id=?",matchId);em.clear();
+  mvc.perform(post("/api/public/matches/"+matchId+"/guests").contentType("application/json").content("{\"fullName\":\"Guest\",\"mobile\":\"+97412345670\"}")).andExpect(status().isConflict());
+ }
 }
