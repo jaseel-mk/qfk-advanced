@@ -1,64 +1,18 @@
 import {useEffect,useState,type ReactNode} from 'react';
-import {CalendarDays,MapPin,Users,Shield,RefreshCw,ChevronRight} from 'lucide-react';
-import {api,type Match,type Session} from './api-client';
+import {api,type Session} from './api-client';
+import {Form,Table,type Row,type Field} from './operations';
 import './command-center.css';
-
-type Registration={id:string;status:'CONFIRMED'|'WAITLIST'|'CANCELLED'|'REMOVED'};
-export const canManageMatches=(session:Session|null)=>Boolean(session&&['ORGANIZER','ADMIN','SUPER_ADMIN'].includes(session.role));
-const label=(value:string)=>value.toLowerCase().replaceAll('_',' ');
-const date=(value:string)=>new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Qatar',dateStyle:'medium',timeStyle:'short'}).format(new Date(value));
+import {Notifications} from './management-features';
+export const canManageMatches=(s:Session|null)=>Boolean(s&&['ADMIN','SUPER_ADMIN','ORGANIZER'].includes(s.role));
+const opts=(...x:string[]):[string,string][]=>x.map(v=>[v,v.replaceAll('_',' ')]);
+const choices=(r:Row[],key:string):[string,string][]=>r.map(v=>[String(v.id),String(v[key])]);
 export function CommandCenter({session,brand,onBack}:{session:Session|null;brand:ReactNode;onBack:()=>void}){
- const allowed=canManageMatches(session);
- const [matches,setMatches]=useState<Match[]>([]);
- const [selectedId,setSelectedId]=useState('');
- const [registrations,setRegistrations]=useState<Registration[]>([]);
- const [loading,setLoading]=useState(true);
- const [detailLoading,setDetailLoading]=useState(true);
- const [error,setError]=useState('');
- const [detailError,setDetailError]=useState('');
- const [refresh,setRefresh]=useState(0);
- const [updated,setUpdated]=useState('');
- useEffect(()=>{
-  if(!allowed)return;
-  let active=true;setLoading(true);setError('');
-  api.matches().then(rows=>{
-   if(!active)return;
-   setMatches(rows);
-   setSelectedId(previous=>rows.some(m=>m.id===previous)?previous:
-    (rows.find(m=>m.status!=='CANCELLED'&&m.status!=='COMPLETED'&&new Date(m.endsAt).getTime()>Date.now())??rows[rows.length-1])?.id??'');
-  }).catch(e=>{if(active)setError(e instanceof Error?e.message:'Matches could not be loaded.');})
-   .finally(()=>{if(active)setLoading(false);});
-  return()=>{active=false;};
- },[allowed,refresh]);
- useEffect(()=>{
-  if(!allowed||!selectedId||loading||error)return;
-  let active=true;setDetailLoading(true);setDetailError('');setRegistrations([]);setUpdated('');
-  api.registrations(selectedId).then(rows=>{if(active){setRegistrations(rows as Registration[]);setUpdated(new Date().toISOString());}})
-   .catch(e=>{if(active)setDetailError(e instanceof Error?e.message:'Registration counts could not be loaded.');})
-   .finally(()=>{if(active)setDetailLoading(false);});
-  return()=>{active=false;};
- },[allowed,selectedId,loading,error,refresh]);
- const match=matches.find(m=>m.id===selectedId);
- const countsReady=!loading&&!detailLoading&&!detailError;
- const confirmed=registrations.filter(r=>r.status==='CONFIRMED').length;
- const waitlist=registrations.filter(r=>r.status==='WAITLIST').length;
- const available=Math.max(0,(match?.maximumPlayers??0)-confirmed);
- const changeMatch=(id:string)=>{setDetailLoading(true);setRegistrations([]);setDetailError('');setUpdated('');setSelectedId(id);};
- return <div className="portal-page"><header className="portal-nav">{brand}<button className="secondary" onClick={onBack}>Back to matches</button></header>
-  <main className="cc-main"><div className="cc-heading"><div><small>MATCH MANAGEMENT</small><h1>Command Center</h1><p>Select a match to see its latest availability.</p></div>{allowed&&<button className="secondary" onClick={()=>setRefresh(x=>x+1)} disabled={loading||Boolean(selectedId)&&detailLoading}><RefreshCw/> Refresh</button>}</div>
-  {!allowed?<section className="empty-state"><Shield/><h2>Organizer access required</h2><p>Log in with an organizer or admin account to manage matches.</p></section>:
-   error?<section className="cc-error" role="alert"><h2>Matches could not be loaded</h2><p>{error}</p><button className="primary" onClick={()=>setRefresh(x=>x+1)}>Try again</button></section>:
-   loading?<div className="loading-card" role="status">Loading matches… The first request may take longer while the service wakes up.</div>:
-   !matches.length?<section className="empty-state"><CalendarDays/><h2>No matches yet</h2><p>Published and draft matches will appear here. Match creation will be added in the next stage.</p></section>:
-   <><label className="cc-selector">Select match<select value={selectedId} onChange={e=>changeMatch(e.target.value)}>{matches.map(m=><option key={m.id} value={m.id}>#{m.matchNumber} · {m.title} · {date(m.startsAt)}</option>)}</select></label>
-   {match&&<><section className="cc-match"><div className="cc-breadcrumb">Match #{match.matchNumber}<ChevronRight/> Overview</div><span className="cc-status">{label(match.status)}</span><h2>{match.title}</h2><div className="cc-meta"><span><CalendarDays/> {date(match.startsAt)} – {date(match.endsAt)} · Qatar time</span><span><MapPin/> {match.venue}</span></div></section>
-    {detailError&&<div className="cc-error" role="alert"><p>{detailError}</p><button className="secondary" onClick={()=>setRefresh(x=>x+1)}>Retry counts</button></div>}
-    <section className="cc-metrics" aria-label="Registration overview" aria-busy={detailLoading}>
-     {[['Confirmed players',countsReady?`${confirmed} / ${match.maximumPlayers}`:'—'],['Available places',countsReady?String(available):'—'],['Waitlist',countsReady?String(waitlist):'—'],['Registration fee',`${match.registrationFee} ${match.currency}`]].map(([name,value])=><article key={name}><span>{name}</span><strong>{value}</strong></article>)}
-    </section>
-    <section className="cc-summary"><div><Users/><h2>Registration overview</h2></div>{detailLoading?<p role="status">Loading registration counts…</p>:detailError?<p>Counts are unavailable until the service responds.</p>:<><div className="cc-capacity"><span>Confirmed capacity</span><b>{confirmed} of {match.maximumPlayers}</b></div><progress max={Math.max(1,match.maximumPlayers)} value={confirmed} aria-label="Confirmed player capacity"/><p>{available} unfilled {available===1?'place':'places'} · {waitlist} on the waitlist</p><small>Updated {updated?date(updated):'now'}. Use Refresh to check for changes.</small></>}</section>
-    <p className="cc-next">Next stage: player registration and waitlist management.</p>
-   </>}
-   </>}
-  </main></div>;
+ const allowed=canManageMatches(session);const [matches,setMatches]=useState<Row[]>([]),[members,setMembers]=useState<Row[]>([]),[teams,setTeams]=useState<Row[]>([]),[id,setId]=useState(''),[data,setData]=useState<{match:Row;roster:Row[]}|null>(null),[refresh,setRefresh]=useState(0),[busy,setBusy]=useState(false),[error,setError]=useState(''),[editor,setEditor]=useState(false),[tab,setTab]=useState('Roster'),[search,setSearch]=useState('');
+ useEffect(()=>{if(!allowed)return;let active=true;Promise.all([api.matches(),api.operations<Row[]>('/operations/members'),api.operations<Row[]>('/operations/teams')]).then(([m,u,t])=>{if(active){setMatches(m as unknown as Row[]);setMembers(u.filter(x=>x.active));setTeams(t.filter(x=>x.active));setId(previous=>m.some(x=>x.id===previous)?previous:m[0]?.id??'')}}).catch(e=>{if(active)setError(e.message)});return()=>{active=false}},[allowed,refresh]);
+ useEffect(()=>{if(!id||!allowed)return;let active=true;setData(null);api.operations<{match:Row;roster:Row[]}>(`/manage/matches/${id}`).then(x=>{if(active)setData(x)}).catch(e=>{if(active)setError(e.message)});return()=>{active=false}},[id,allowed,refresh]);
+ async function save(path:string,method='POST',body?:unknown){if(busy)return;setBusy(true);setError('');try{await api.operations(path,method,body);setEditor(false);setRefresh(x=>x+1)}catch(e){setError(e instanceof Error?e.message:'Unable to save')}finally{setBusy(false)}}
+ const roster=data?.roster??[],confirmed=roster.filter(r=>r.status==='CONFIRMED'),closed=['COMPLETED','CANCELLED'].includes(String(data?.match.status));
+ const fields:Field[]=[{key:'matchNumber',label:'Match number',type:'number',min:1},{key:'title',label:'Title'},{key:'type',label:'Type',options:opts('COMMUNITY_MATCH','FRIENDLY','TOURNAMENT','PRACTICE','INTERNAL','EXTERNAL')},{key:'status',label:'Status',options:opts('DRAFT','REGISTRATION_OPEN','REGISTRATION_CLOSED','FULL','CONFIRMED','IN_PROGRESS','COMPLETED','CANCELLED')},{key:'startsAt',label:'Start (Qatar time)',type:'datetime-local'},{key:'endsAt',label:'End (Qatar time)',type:'datetime-local'},{key:'venue',label:'Venue'},{key:'maximumPlayers',label:'Capacity',type:'number',min:2,value:'16'},{key:'registrationFee',label:'Fee (QAR)',type:'number',min:0,step:'0.01',value:'0'}];
+ const line=(r:Row,key:string,value:unknown)=>void save(`/manage/matches/${id}/lineup/${r.id}`,'PUT',{side:r.side??'UNASSIGNED',position:r.position??'UTILITY',starter:r.starter??true,[key]:value});
+ return <div className="portal-page"><header className="portal-nav">{brand}<Notifications/><button className="secondary" onClick={onBack}>Back to matches</button></header><main className="cc-main"><div className="cc-heading"><div><small>MATCH DAY CONTROL</small><h1>Command Center</h1><p>Registrations, squads, fees, attendance and results.</p></div>{allowed&&<button className="primary" onClick={()=>setEditor(true)}>Create match</button>}</div>{!allowed?<p>Organizer or admin access is required.</p>:<>{error&&<p className="cc-error" role="alert">{error}</p>}{editor&&<Form title="Create match" fields={fields} busy={busy} onCancel={()=>setEditor(false)} onSave={body=>void save('/matches','POST',body)}/>}<label className="cc-selector">Select match<select value={id} onChange={e=>{setId(e.target.value);setError('')}}><option value="">Select…</option>{matches.map(m=><option value={String(m.id)} key={String(m.id)}>#{String(m.matchNumber)} · {String(m.title)}</option>)}</select></label><button className="secondary" disabled={busy} onClick={()=>setRefresh(x=>x+1)}>Refresh</button>{data?<><section className="cc-match"><span className="cc-status">{String(data.match.status)}</span><h2>{String(data.match.title)}</h2><p>{String(data.match.venue)}</p><details><summary>Edit match</summary><Form key={id+refresh} title="Match details" fields={fields} busy={busy} initial={matches.find(m=>m.id===id)??{}} onSave={body=>void save('/matches/'+id,'PUT',body)}/></details><div className="ops-actions">{!closed&&['REGISTRATION_OPEN','REGISTRATION_CLOSED','TEAM_SELECTION','CONFIRMED','IN_PROGRESS','COMPLETED','CANCELLED'].map(status=><button className="secondary" key={status} disabled={busy||data.match.status===status} onClick={()=>{if(['COMPLETED','CANCELLED'].includes(status)&&!window.confirm(`${status==='COMPLETED'?'Complete':'Cancel'} this match?`))return;void save(`/manage/matches/${id}/status`,'PUT',{status})}}>{status.replaceAll('_',' ')}</button>)}</div></section><section className="cc-metrics">{[['Confirmed',confirmed.length+' / '+data.match.maximum_players],['Waitlist',roster.filter(r=>r.status==='WAITLIST').length],['Present',roster.filter(r=>r.attendance_status==='PRESENT').length],['Unpaid fees',confirmed.filter(r=>r.payment_status==='PENDING').length]].map(([k,v])=><article key={String(k)}><span>{k}</span><strong>{v}</strong></article>)}</section><nav className="cc-tabs" aria-label="Match controls">{['Roster','Add players','Lineups','Results'].map(t=><button className={t===tab?'primary':'secondary'} onClick={()=>setTab(t)} key={t}>{t}</button>)}</nav>{tab==='Roster'&&<><label className="ops-select">Search players<input value={search} onChange={e=>setSearch(e.target.value)}/></label><Table rows={roster.filter(r=>String(r.player_name).toLowerCase().includes(search.toLowerCase()))} columns={ [['player_name','Player'],['guest_name','Guest'],['guest_mobile','Guest mobile'],['status','Registration'],['waitlist_position','Queue'],['payment_status','Fee'],['attendance_status','Attendance']]} actions={r=><>{[['payment_status','Fee',['PENDING','PAID','WAIVED','REFUNDED'],'payment'],['attendance_status','Attendance',['NOT_MARKED','PRESENT','ABSENT','EXCUSED'],'attendance']].map(([key,label,values,path])=><label key={String(key)}>{String(label)}<select aria-label={String(label)+' for '+r.player_name} disabled={busy} value={String(r[String(key)])} onChange={e=>void save(`/matches/registrations/${r.id}/${path}`,'PATCH',{status:e.target.value})}>{(values as string[]).map(v=><option key={v}>{v}</option>)}</select></label>)}{['CONFIRMED','WAITLIST'].includes(String(r.status))&&!closed&&<button className="secondary" disabled={busy} onClick={()=>{if(window.confirm('Cancel this registration? The next waiting player may be promoted.'))void save(`/matches/registrations/${r.id}`,'DELETE')}}>Cancel registration</button>}</>}/></>} {tab==='Add players'&&<><Form title="Add member" busy={busy||closed} fields={[{key:'memberId',label:'Member',options:choices(members,'full_name')}]} onSave={body=>void save(`/matches/${id}/members`,'POST',body)}/><Form title="Add guest" busy={busy||closed} fields={[{key:'fullName',label:'Guest name',max:160},{key:'mobile',label:'Mobile with country code',max:40}]} onSave={body=>void save(`/matches/${id}/guests`,'POST',body)}/></>}{tab==='Lineups'&&<><Form key={id+refresh} title="Match teams (or use Home and Away squads)" busy={busy||closed} initial={{homeTeamId:data.match.home_team_id,awayTeamId:data.match.away_team_id}} fields={[{key:'homeTeamId',label:'Home team',options:choices(teams,'name'),optional:true},{key:'awayTeamId',label:'Away team',options:choices(teams,'name'),optional:true}]} onSave={body=>void save(`/manage/matches/${id}/teams`,'PUT',body)}/><button className="secondary" disabled={busy||closed} onClick={()=>{if(window.confirm('Replace squad assignments with balanced squads?'))void save(`/manage/matches/${id}/balance`)}}>Balance squads</button><Table rows={confirmed} columns={ [['player_name','Player'],['side','Side'],['position','Position'],['starter','Starter']]} actions={r=><>{[['side',['UNASSIGNED','HOME','AWAY']],['position',['GOALKEEPER','DEFENDER','MIDFIELDER','FORWARD','UTILITY']]].map(([k,values])=><label key={String(k)}>{String(k)}<select aria-label={String(k)+' for '+r.player_name} value={String(r[String(k)]??(k==='side'?'UNASSIGNED':'UTILITY'))} disabled={busy||closed} onChange={e=>line(r,String(k),e.target.value)}>{(values as string[]).map(v=><option key={v}>{v}</option>)}</select></label>)}<label><input type="checkbox" checked={Boolean(r.starter??true)} disabled={busy||closed} onChange={e=>line(r,'starter',e.target.checked)}/> Starter</label></>}/></>}{tab==='Results'&&<><Form key={'score'+id+refresh} title={`${String(data.match.home_name??'Home')} vs ${String(data.match.away_name??'Away')}`} busy={busy||closed} fields={[{key:'homeScore',label:'Home goals',type:'number',min:0},{key:'awayScore',label:'Away goals',type:'number',min:0}]} initial={{homeScore:data.match.home_score,awayScore:data.match.away_score}} onSave={body=>void save(`/manage/matches/${id}/result`,'PUT',body)}/><p>Start the match before saving its score; save the result before completing it.</p>{confirmed.map(r=><Form key={String(r.id)+refresh} title={String(r.player_name)+(r.guest_name?' (guest)':'')} busy={busy} fields={[{key:'goals',label:'Goals',type:'number',min:0},{key:'assists',label:'Assists',type:'number',min:0}]} initial={r} onSave={body=>void save(`/manage/matches/${id}/statistics/${r.id}`,'PUT',body)}/>)}</>}</>:<p>{id?'Loading match controls…':'Create or select a match to begin.'}</p>}</>}</main></div>
 }
