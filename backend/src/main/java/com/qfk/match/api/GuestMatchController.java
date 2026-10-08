@@ -1,0 +1,12 @@
+package com.qfk.match.api;
+import com.qfk.match.entity.*;import com.qfk.match.repository.*;import com.qfk.match.service.RegistrationService;import jakarta.validation.Valid;import jakarta.validation.constraints.*;import java.time.Instant;import java.util.*;import org.springframework.web.bind.annotation.*;
+@RestController @RequestMapping("/api/public/matches") public class GuestMatchController{
+ private record Attempt(long started,int count){} private final Map<String,Attempt> attempts=new HashMap<>();
+ private synchronized void limit(String address){long now=System.currentTimeMillis();attempts.entrySet().removeIf(e->now-e.getValue().started()>600000);var old=attempts.get(address);if(old!=null&&old.count()>=8)throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS,"Too many guest attempts. Please try again later.");if(old==null&&attempts.size()>=10000)throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS);attempts.put(address,new Attempt(old==null?now:old.started(),old==null?1:old.count()+1));}
+ private final MatchRepository matches;private final RegistrationRepository registrations;private final RegistrationService service;
+ public GuestMatchController(MatchRepository m,RegistrationRepository r,RegistrationService s){matches=m;registrations=r;service=s;}
+ @GetMapping public List<MatchController.MatchView> list(){return matches.findAll().stream().filter(m->m.startsAt!=null&&m.startsAt.isAfter(Instant.now())&&(m.status==FootballMatch.MatchStatus.REGISTRATION_OPEN||m.status==FootballMatch.MatchStatus.FULL)).sorted(Comparator.comparing(m->m.startsAt)).map(m->new MatchController.MatchView(m.id,m.matchNumber,m.title,m.type,m.status,m.startsAt,m.endsAt,m.venue,m.maximumPlayers,m.registrationFee,m.currency,registrations.countByMatchIdAndStatus(m.id,MatchRegistration.Status.CONFIRMED))).toList();}
+ public record GuestInput(@NotBlank @Size(max=160) String fullName,@NotBlank @Size(max=40) String mobile){}
+ public record GuestReceipt(UUID id,MatchRegistration.Status status,Integer waitlistPosition){}
+ @PostMapping("/{id}/guests") public GuestReceipt register(@PathVariable UUID id,@Valid @RequestBody GuestInput input,jakarta.servlet.http.HttpServletRequest request){limit(request.getRemoteAddr());var r=service.registerGuest(id,input.fullName(),input.mobile());return new GuestReceipt(r.id,r.status,r.waitlistPosition);}
+}
