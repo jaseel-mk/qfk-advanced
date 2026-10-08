@@ -163,6 +163,8 @@ class OperationsIntegrationTest {
   postJson("/api/manage/tournaments/"+t+"/advance","{\"startsAt\":\"2099-01-02T17:00:00Z\",\"intervalMinutes\":60,\"qualifiersPerGroup\":1}","ADMIN");
   assertEquals(3,db.queryForObject("SELECT count(*) FROM tournament_fixtures WHERE tournament_id=?",Integer.class,t));
   assertEquals(1,db.queryForObject("SELECT count(*) FROM tournament_fixtures WHERE tournament_id=? AND round_number=2",Integer.class,t));
+  UUID semifinal=db.queryForObject("SELECT id FROM tournament_fixtures WHERE tournament_id=? AND round_number=1 LIMIT 1",UUID.class,t);
+  mvc.perform(put("/api/operations/fixtures/"+semifinal+"/score").with(as("ADMIN")).contentType("application/json").content("{\"homeScore\":0,\"awayScore\":3}")).andExpect(status().isConflict());
  }
  @Test void groupsGenerateOnlyIntraGroupGamesAndAdvanceQualifiers()throws Exception{
   UUID t=tournament();for(int i=0;i<4;i++){UUID team=team("Group "+i);db.update("INSERT INTO tournament_teams(tournament_id,team_id,group_name) VALUES(?,?,?)",t,team,i<2?"A":"B");}
