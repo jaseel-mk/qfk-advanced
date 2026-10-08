@@ -96,7 +96,7 @@ class OperationsIntegrationTest {
   mvc.perform(get("/api/matches/"+matchId+"/registrations")).andExpect(status().isUnauthorized());
   mvc.perform(get("/api/public/matches")).andExpect(status().isOk()).andExpect(jsonPath("$[0].id").value(matchId.toString()));
   mvc.perform(post("/api/public/matches/"+matchId+"/guests").contentType("application/json").content("{\"fullName\":\"Guest\",\"mobile\":\"123\"}")).andExpect(status().isBadRequest());
-  db.update("UPDATE matches SET status='REGISTRATION_CLOSED' WHERE id=?",matchId);
+  db.update("UPDATE matches SET status='REGISTRATION_CLOSED' WHERE id=?",matchId);em.clear();
   mvc.perform(post("/api/public/matches/"+matchId+"/guests").contentType("application/json").content("{\"fullName\":\"Guest\",\"mobile\":\"+97412345670\"}")).andExpect(status().isConflict());
  }
 }
