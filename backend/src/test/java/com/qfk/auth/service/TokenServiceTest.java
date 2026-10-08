@@ -19,6 +19,8 @@ class TokenServiceTest {
  private final SecurityConfig security=new SecurityConfig();
  private final RefreshTokenRepository refreshTokens=mock(RefreshTokenRepository.class);
 
+ private org.springframework.security.oauth2.jwt.JwtDecoder decoder(String secret)throws Exception{var db=mock(org.springframework.jdbc.core.JdbcTemplate.class);when(db.queryForObject(anyString(),eq(Boolean.class),any(UUID.class),anyString())).thenReturn(true);return security.jwtDecoder(secret,db);}
+ @Test void changedAccountAccessInvalidatesExistingToken()throws Exception{var service=new TokenService(security.jwtEncoder(SECRET),refreshTokens);var token=service.issue(user());var db=mock(org.springframework.jdbc.core.JdbcTemplate.class);when(db.queryForObject(anyString(),eq(Boolean.class),any(UUID.class),anyString())).thenReturn(false);assertThrows(JwtException.class,()->security.jwtDecoder(SECRET,db).decode(token.accessToken()));}
  private UserAccount user(){
   var user=new UserAccount();user.id=UUID.randomUUID();user.email="member@example.com";
   user.member=new Member();user.member.id=UUID.randomUUID();return user;
@@ -27,12 +29,12 @@ class TokenServiceTest {
  @Test void issuedTokenMatchesConfiguredHmacKeyAndRejectsAnotherKey() throws Exception {
   var user=user();var service=new TokenService(security.jwtEncoder(SECRET),refreshTokens);
   var tokens=service.issue(user);
-  var jwt=security.jwtDecoder(SECRET).decode(tokens.accessToken());
+  var jwt=decoder(SECRET).decode(tokens.accessToken());
   assertEquals("HS256",jwt.getHeaders().get("alg"));
   assertEquals(user.id.toString(),jwt.getSubject());
   assertEquals(user.member.id.toString(),jwt.getClaimAsString("memberId"));
   assertEquals("MEMBER",jwt.getClaimAsString("role"));
-  var wrongKeyDecoder=security.jwtDecoder("different-test-secret");
+  var wrongKeyDecoder=decoder("different-test-secret");
   assertThrows(JwtException.class,()->wrongKeyDecoder.decode(tokens.accessToken()));
   verify(refreshTokens).save(any(RefreshToken.class));
  }
@@ -44,7 +46,7 @@ class TokenServiceTest {
   var service=new TokenService(security.jwtEncoder(SECRET),refreshTokens);
   var tokens=service.rotate("existing-refresh-token");
   assertNotNull(previous.revokedAt);
-  assertEquals(user.id.toString(),security.jwtDecoder(SECRET).decode(tokens.accessToken()).getSubject());
+  assertEquals(user.id.toString(),decoder(SECRET).decode(tokens.accessToken()).getSubject());
   verify(refreshTokens).save(any(RefreshToken.class));
  }
 }
