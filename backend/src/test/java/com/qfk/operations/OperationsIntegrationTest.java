@@ -172,4 +172,20 @@ class OperationsIntegrationTest {
   db.update("UPDATE tournament_fixtures SET home_score=1,away_score=0 WHERE tournament_id=?",t);
   postJson("/api/manage/tournaments/"+t+"/advance","{\"startsAt\":\"2099-01-02T17:00:00Z\",\"intervalMinutes\":60,\"qualifiersPerGroup\":1}","ADMIN");assertEquals(3,db.queryForObject("SELECT count(*) FROM tournament_fixtures WHERE tournament_id=?",Integer.class,t));
  }
+ @Test void lineupBuilderPersistsPositionsColorsAndRejectsDuplicates()throws Exception{
+  UUID registration=UUID.fromString(id(postJson("/api/matches/"+matchId+"/guests","{\"fullName\":\"Builder guest\",\"mobile\":\"+97400000090\"}","ADMIN")));em.flush();
+  var player=Map.of("registrationId",registration,"side","HOME","position","FORWARD","starter",true,"x",22.5,"y",18.5,"shirtNumber",9);
+  var body=new HashMap<String,Object>(Map.of("starterLimit",5,"homeName","Maroon","awayName","White","homeColor","#801735","awayColor","#475463","players",List.of(player)));
+  putOk("/api/manage/matches/"+matchId+"/builder",body,"ADMIN");
+  mvc.perform(get("/api/manage/matches/"+matchId).with(as("ADMIN"))).andExpect(jsonPath("$.roster[0].pitch_x").value(22.5)).andExpect(jsonPath("$.roster[0].shirt_number").value(9));
+  mvc.perform(get("/api/manage/matches/"+matchId+"/builder").with(as("ADMIN"))).andExpect(jsonPath("$.starter_limit").value(5)).andExpect(jsonPath("$.home_name").value("Maroon"));
+  body.put("players",List.of(player,player));mvc.perform(put("/api/manage/matches/"+matchId+"/builder").with(as("ADMIN")).contentType("application/json").content(json.writeValueAsString(body))).andExpect(status().isBadRequest());
+  mvc.perform(get("/api/manage/matches/"+matchId+"/builder").with(as("MEMBER"))).andExpect(status().isForbidden());
+ }
+ @Test void lineupBuilderRejectsOverCapacityWithoutPartialWrites()throws Exception{
+  var players=new ArrayList<Map<String,Object>>();for(int n=0;n<6;n++){UUID m=UUID.randomUUID(),r=UUID.randomUUID();db.update("INSERT INTO members(id,full_name,joined_on) VALUES(?,'Builder player',current_date)",m);db.update("INSERT INTO match_registrations(id,match_id,member_id,status,registered_at) VALUES(?,?,?,'CONFIRMED',now())",r,matchId,m);players.add(Map.of("registrationId",r,"side","HOME","position","UTILITY","starter",true,"x",50,"y",50,"shirtNumber",n+1));}
+  var body=Map.of("starterLimit",5,"homeName","Home","awayName","Away","homeColor","#801735","awayColor","#475463","players",players);
+  mvc.perform(put("/api/manage/matches/"+matchId+"/builder").with(as("ADMIN")).contentType("application/json").content(json.writeValueAsString(body))).andExpect(status().isBadRequest());assertEquals(0,db.queryForObject("SELECT count(*) FROM match_lineups",Integer.class));
+ }
+
 }
