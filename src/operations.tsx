@@ -76,7 +76,7 @@ export function Operations({session,section,onSection,brand,onHome,onLogin,onCom
 
    const data=await api.operations<unknown>(section==='Matches'?'/matches':'/operations/'+section.toLowerCase());
 
-   if(!active)return;if(section==='Finance'){const f=data as {entries:Row[];summary:Row};setRows(f.entries);setSummary(f.summary);}else setRows(data as Row[]);
+   if(!active)return;if(section==='Finance'){const f=data as {entries:Row[];summary:Row};setRows(f.entries);setSummary(f.summary);}else {setRows(data as Row[]);setSelected(previous=>previous?(data as Row[]).find(row=>row.id===previous.id)??previous:null);}
 
    if(manage){const [m,t,x]=await Promise.all([api.operations<Row[]>('/operations/members'),api.operations<Row[]>('/operations/teams'),api.operations<Row[]>('/matches')]);if(active){setMembers(m);setTeams(t);setMatches(x);}}
 
