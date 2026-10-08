@@ -1,0 +1,31 @@
+name: Backend checks
+on:
+  push:
+    branches: [main, feat/community-operations]
+  pull_request:
+    paths: ['backend/**', '.github/workflows/backend-checks.yml']
+jobs:
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: qfk_test
+          POSTGRES_USER: qfk_test
+          POSTGRES_PASSWORD: qfk_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      QFK_TEST_DATABASE_URL: jdbc:postgresql://localhost:5432/qfk_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - run: mvn -B test
+        working-directory: backend

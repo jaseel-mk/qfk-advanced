@@ -44,6 +44,7 @@ async function request<T>(path:string, options:RequestInit={},retry=true):Promis
 }
 
 export const api={
+ operations<T=unknown>(path:string,method='GET',body?:unknown){return request<T>(path,{method,...(body===undefined?{}:{body:JSON.stringify(body)})});},
  async register(fullName:string,email:string,password:string){const next=await request<Session>('/auth/register',{method:'POST',body:JSON.stringify({fullName,email,password})});saveSession(next);return next;},
  async login(email:string,password:string){const next=await request<Session>('/auth/login',{method:'POST',body:JSON.stringify({email,password})});saveSession(next);return next;},
  async forgotPassword(email:string){return request<void>('/auth/forgot-password',{method:'POST',body:JSON.stringify({email})});},

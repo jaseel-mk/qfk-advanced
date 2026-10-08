@@ -1,0 +1,90 @@
+package com.qfk.operations;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
+import java.math.BigDecimal;
+import java.sql.Timestamp;
+import java.time.*;
+import java.util.*;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
+
+@RestController @RequestMapping("/api/operations")
+public class OperationsController {
+ private static final String MANAGE="hasAnyRole('ADMIN','SUPER_ADMIN','ORGANIZER')";
+ private static final String ADMIN="hasAnyRole('ADMIN','SUPER_ADMIN')";
+ private final JdbcTemplate db;
+ public OperationsController(JdbcTemplate db){this.db=db;}
+ private UUID user(Jwt jwt){return UUID.fromString(jwt.getSubject());}
+ private UUID member(Jwt jwt){return UUID.fromString(jwt.getClaimAsString("memberId"));}
+ private boolean manager(Jwt jwt){return Set.of("ADMIN","SUPER_ADMIN","ORGANIZER").contains(jwt.getClaimAsString("role"));}
+ private List<Map<String,Object>> rows(String sql,Object...args){
+  var result=db.queryForList(sql,args);
+  for(var row:result)row.replaceAll((k,v)->v instanceof Timestamp t?t.toInstant().toString():v instanceof java.sql.Date d?d.toLocalDate().toString():v);
+  return result;
+ }
+ private Map<String,Object> one(String sql,Object...args){var list=rows(sql,args);if(list.isEmpty())throw new IllegalArgumentException("Record not found");return list.getFirst();}
+ private void changed(int count){if(count!=1)throw new IllegalArgumentException("Record not found or no longer active");}
+ private void choice(String value,String...choices){if(!Arrays.asList(choices).contains(value))throw new IllegalArgumentException("Invalid status or type");}
+ private void exists(String table,UUID id){if(!Boolean.TRUE.equals(db.queryForObject("SELECT EXISTS(SELECT 1 FROM "+table+" WHERE id=?)",Boolean.class,id)))throw new IllegalArgumentException("Record not found");}
+
+ @GetMapping("/members") @PreAuthorize(MANAGE)
+ public List<Map<String,Object>> members(){return rows("SELECT m.*,u.role AS account_role FROM members m LEFT JOIN user_accounts u ON u.member_id=m.id ORDER BY m.full_name");}
+ public record MemberInput(@NotBlank @Size(max=160) String fullName,@Size(max=80) String nickname,@Size(max=40) String mobile,@Size(max=120) String location,@NotNull LocalDate joinedOn,boolean active){}
+ @PostMapping("/members") @PreAuthorize(MANAGE)
+ public Map<String,Object> createMember(@Valid @RequestBody MemberInput r){return one("INSERT INTO members(full_name,nickname,mobile,location,joined_on,active) VALUES(?,?,?,?,?,?) RETURNING *",r.fullName().trim(),r.nickname(),r.mobile(),r.location(),r.joinedOn(),r.active());}
+ @PutMapping("/members/{id}") @PreAuthorize(MANAGE)
+ public Map<String,Object> updateMember(@PathVariable UUID id,@Valid @RequestBody MemberInput r){return one("UPDATE members SET full_name=?,nickname=?,mobile=?,location=?,joined_on=?,active=? WHERE id=? RETURNING *",r.fullName().trim(),r.nickname(),r.mobile(),r.location(),r.joinedOn(),r.active(),id);}
+
+ @GetMapping("/teams") public List<Map<String,Object>> teams(){return rows("SELECT t.*,(SELECT count(*) FROM team_members tm WHERE tm.team_id=t.id AND tm.left_at IS NULL) AS member_count FROM teams t ORDER BY t.name");}
+ public record TeamInput(@NotBlank @Size(max=160) String name,@NotBlank @Size(max=30) String shortName,@Size(max=3000) String description,@NotNull LocalDate foundedOn,boolean active){}
+ @PostMapping("/teams") @PreAuthorize(MANAGE) public Map<String,Object> createTeam(@Valid @RequestBody TeamInput r){return one("INSERT INTO teams(name,short_name,description,founded_on,active) VALUES(?,?,?,?,?) RETURNING *",r.name().trim(),r.shortName().trim(),r.description(),r.foundedOn(),r.active());}
+ @PutMapping("/teams/{id}") @PreAuthorize(MANAGE) public Map<String,Object> updateTeam(@PathVariable UUID id,@Valid @RequestBody TeamInput r){return one("UPDATE teams SET name=?,short_name=?,description=?,founded_on=?,active=? WHERE id=? RETURNING *",r.name().trim(),r.shortName().trim(),r.description(),r.foundedOn(),r.active(),id);}
+ @GetMapping("/teams/{id}/members") public List<Map<String,Object>> teamMembers(@PathVariable UUID id){exists("teams",id);return rows("SELECT m.id,m.full_name,tm.role,tm.joined_at FROM team_members tm JOIN members m ON m.id=tm.member_id WHERE tm.team_id=? AND tm.left_at IS NULL ORDER BY m.full_name",id);}
+ public record TeamMemberInput(@NotNull UUID memberId,@NotBlank String role){}
+ @PostMapping("/teams/{id}/members") @PreAuthorize(MANAGE) @Transactional public void addTeamMember(@PathVariable UUID id,@Valid @RequestBody TeamMemberInput r){choice(r.role(),"PLAYER","CAPTAIN","COACH");one("SELECT id FROM teams WHERE id=? AND active=true FOR UPDATE",id);one("SELECT id FROM members WHERE id=? AND active=true",r.memberId());db.update("INSERT INTO team_members(team_id,member_id,role) VALUES(?,?,?)",id,r.memberId(),r.role());}
+ @DeleteMapping("/teams/{id}/members/{memberId}") @PreAuthorize(MANAGE) public void removeTeamMember(@PathVariable UUID id,@PathVariable UUID memberId){changed(db.update("UPDATE team_members SET left_at=now() WHERE team_id=? AND member_id=? AND left_at IS NULL",id,memberId));}
+
+ @GetMapping("/tournaments") public List<Map<String,Object>> tournaments(){return rows("SELECT t.*,(SELECT count(*) FROM tournament_teams tt WHERE tt.tournament_id=t.id) AS team_count FROM tournaments t ORDER BY t.starts_on DESC");}
+ public record TournamentInput(@NotBlank @Size(max=180) String name,@NotNull LocalDate startsOn,@NotNull LocalDate endsOn,@NotBlank @Size(max=180) String venue,@NotBlank String status,@Size(max=5000) String description){}
+ private void tournamentValid(TournamentInput r){choice(r.status(),"DRAFT","OPEN","IN_PROGRESS","COMPLETED","CANCELLED");if(r.endsOn().isBefore(r.startsOn()))throw new IllegalArgumentException("End date must follow start date");}
+ @PostMapping("/tournaments") @PreAuthorize(MANAGE) public Map<String,Object> createTournament(@Valid @RequestBody TournamentInput r){tournamentValid(r);return one("INSERT INTO tournaments(name,starts_on,ends_on,venue,status,description) VALUES(?,?,?,?,?,?) RETURNING *",r.name(),r.startsOn(),r.endsOn(),r.venue(),r.status(),r.description());}
+ @PutMapping("/tournaments/{id}") @PreAuthorize(MANAGE) public Map<String,Object> updateTournament(@PathVariable UUID id,@Valid @RequestBody TournamentInput r){tournamentValid(r);return one("UPDATE tournaments SET name=?,starts_on=?,ends_on=?,venue=?,status=?,description=? WHERE id=? RETURNING *",r.name(),r.startsOn(),r.endsOn(),r.venue(),r.status(),r.description(),id);}
+ @GetMapping("/tournaments/{id}/teams") public List<Map<String,Object>> tournamentTeams(@PathVariable UUID id){exists("tournaments",id);return rows("SELECT t.id,t.name,t.short_name FROM tournament_teams tt JOIN teams t ON tt.team_id=t.id WHERE tt.tournament_id=? ORDER BY t.name",id);}
+ public record EnrollInput(@NotNull UUID teamId){}
+ @PostMapping("/tournaments/{id}/teams") @PreAuthorize(MANAGE) @Transactional public void enroll(@PathVariable UUID id,@Valid @RequestBody EnrollInput r){one("SELECT id FROM tournaments WHERE id=? AND status IN ('DRAFT','OPEN') FOR UPDATE",id);one("SELECT id FROM teams WHERE id=? AND active=true",r.teamId());db.update("INSERT INTO tournament_teams(tournament_id,team_id) VALUES(?,?)",id,r.teamId());}
+ @GetMapping("/tournaments/{id}/fixtures") public List<Map<String,Object>> fixtures(@PathVariable UUID id){exists("tournaments",id);return rows("SELECT f.*,h.name AS home_name,a.name AS away_name FROM tournament_fixtures f JOIN teams h ON h.id=f.home_team_id JOIN teams a ON a.id=f.away_team_id WHERE tournament_id=? ORDER BY starts_at",id);}
+ public record FixtureInput(@NotNull UUID homeTeamId,@NotNull UUID awayTeamId,@NotNull Instant startsAt){}
+ @PostMapping("/tournaments/{id}/fixtures") @PreAuthorize(MANAGE) @Transactional public Map<String,Object> createFixture(@PathVariable UUID id,@Valid @RequestBody FixtureInput r){if(r.homeTeamId().equals(r.awayTeamId()))throw new IllegalArgumentException("Select two different teams");var t=one("SELECT * FROM tournaments WHERE id=? AND status NOT IN ('COMPLETED','CANCELLED') FOR UPDATE",id);LocalDate day=r.startsAt().atZone(ZoneId.of("Asia/Qatar")).toLocalDate();if(day.isBefore(LocalDate.parse(t.get("starts_on").toString()))||day.isAfter(LocalDate.parse(t.get("ends_on").toString())))throw new IllegalArgumentException("Fixture must be within the tournament dates");return one("INSERT INTO tournament_fixtures(tournament_id,home_team_id,away_team_id,starts_at) VALUES(?,?,?,?) RETURNING *",id,r.homeTeamId(),r.awayTeamId(),Timestamp.from(r.startsAt()));}
+ public record ScoreInput(@Min(0) int homeScore,@Min(0) int awayScore){}
+ @PutMapping("/fixtures/{id}/score") @PreAuthorize(MANAGE) public Map<String,Object> score(@PathVariable UUID id,@Valid @RequestBody ScoreInput r){return one("UPDATE tournament_fixtures SET home_score=?,away_score=? WHERE id=? RETURNING *",r.homeScore(),r.awayScore(),id);}
+ @GetMapping("/tournaments/{id}/standings") public List<Map<String,Object>> standings(@PathVariable UUID id){exists("tournaments",id);return rows("WITH results AS (SELECT home_team_id AS team_id,home_score AS gf,away_score AS ga FROM tournament_fixtures WHERE tournament_id=? AND home_score IS NOT NULL UNION ALL SELECT away_team_id,away_score,home_score FROM tournament_fixtures WHERE tournament_id=? AND home_score IS NOT NULL) SELECT t.id,t.name,count(r.team_id) AS played,count(*) FILTER(WHERE gf>ga) AS won,count(*) FILTER(WHERE gf=ga) AS drawn,count(*) FILTER(WHERE gf<ga) AS lost,coalesce(sum(gf),0) AS goals_for,coalesce(sum(ga),0) AS goals_against,coalesce(sum(gf-ga),0) AS goal_difference,coalesce(sum(CASE WHEN gf>ga THEN 3 WHEN gf=ga THEN 1 ELSE 0 END),0) AS points FROM tournament_teams tt JOIN teams t ON t.id=tt.team_id LEFT JOIN results r ON r.team_id=t.id WHERE tt.tournament_id=? GROUP BY t.id,t.name ORDER BY points DESC,goal_difference DESC,goals_for DESC,t.name",id,id,id);}
+
+ @GetMapping("/finance") @PreAuthorize(ADMIN) public Map<String,Object> finance(){return Map.of("entries",rows("SELECT f.*,m.full_name AS member_name,x.title AS match_title FROM finance_entries f LEFT JOIN members m ON m.id=f.member_id LEFT JOIN matches x ON x.id=f.match_id ORDER BY occurred_on DESC,created_at DESC"),"summary",one("SELECT coalesce(sum(amount) FILTER(WHERE kind='INCOME'),0) AS income,coalesce(sum(amount) FILTER(WHERE kind='EXPENSE'),0) AS expenses,coalesce(sum(CASE WHEN kind='INCOME' THEN amount ELSE -amount END),0) AS balance FROM finance_entries WHERE voided_at IS NULL"));}
+ public record FinanceInput(@NotBlank String kind,@NotNull @DecimalMin("0.01") @Digits(integer=10,fraction=2) BigDecimal amount,@NotBlank @Size(max=80) String category,@NotBlank @Size(max=500) String description,@NotNull LocalDate occurredOn,UUID memberId,UUID matchId){}
+ @PostMapping("/finance") @PreAuthorize(ADMIN) public Map<String,Object> createFinance(@Valid @RequestBody FinanceInput r,@AuthenticationPrincipal Jwt jwt){choice(r.kind(),"INCOME","EXPENSE");return one("INSERT INTO finance_entries(kind,amount,category,description,occurred_on,member_id,match_id,created_by) VALUES(?,?,?,?,?,?,?,?) RETURNING *",r.kind(),r.amount(),r.category(),r.description(),r.occurredOn(),r.memberId(),r.matchId(),user(jwt));}
+ public record VoidInput(@NotBlank @Size(max=500) String reason){}
+ @PostMapping("/finance/{id}/void") @PreAuthorize(ADMIN) public void voidFinance(@PathVariable UUID id,@Valid @RequestBody VoidInput r,@AuthenticationPrincipal Jwt jwt){changed(db.update("UPDATE finance_entries SET voided_at=now(),voided_by=?,void_reason=? WHERE id=? AND voided_at IS NULL",user(jwt),r.reason(),id));}
+
+ @GetMapping("/statistics") public List<Map<String,Object>> statistics(){return rows("WITH scores AS (SELECT member_id,sum(goals) AS goals,sum(assists) AS assists FROM player_match_statistics GROUP BY member_id), attendance AS (SELECT member_id,count(*) FILTER(WHERE attendance_status='PRESENT') AS appearances,count(*) FILTER(WHERE attendance_status IN ('PRESENT','ABSENT')) AS marked FROM match_registrations GROUP BY member_id) SELECT m.id,m.full_name,coalesce(s.goals,0) AS goals,coalesce(s.assists,0) AS assists,coalesce(a.appearances,0) AS appearances,coalesce(round(100.0*a.appearances/nullif(a.marked,0)),0) AS attendance_percent FROM members m LEFT JOIN scores s ON s.member_id=m.id LEFT JOIN attendance a ON a.member_id=m.id ORDER BY goals DESC,assists DESC,m.full_name");}
+ public record StatisticsInput(@NotNull UUID matchId,@NotNull UUID memberId,@Min(0) int goals,@Min(0) int assists){}
+ @PutMapping("/statistics") @PreAuthorize(MANAGE) public void saveStatistics(@Valid @RequestBody StatisticsInput r,@AuthenticationPrincipal Jwt jwt){one("SELECT id FROM match_registrations WHERE match_id=? AND member_id=? AND status='CONFIRMED'",r.matchId(),r.memberId());db.update("INSERT INTO player_match_statistics(match_id,member_id,goals,assists,updated_by) VALUES(?,?,?,?,?) ON CONFLICT(match_id,member_id) DO UPDATE SET goals=excluded.goals,assists=excluded.assists,updated_by=excluded.updated_by,updated_at=now()",r.matchId(),r.memberId(),r.goals(),r.assists(),user(jwt));}
+ @GetMapping("/statistics/matches/{id}") public List<Map<String,Object>> matchStatistics(@PathVariable UUID id){return rows("SELECT r.member_id,m.full_name,coalesce(s.goals,0) AS goals,coalesce(s.assists,0) AS assists FROM match_registrations r JOIN members m ON m.id=r.member_id LEFT JOIN player_match_statistics s ON s.match_id=r.match_id AND s.member_id=r.member_id WHERE r.match_id=? AND r.status='CONFIRMED' ORDER BY m.full_name",id);}
+
+ @GetMapping("/polls") public List<Map<String,Object>> polls(@AuthenticationPrincipal Jwt jwt){var polls=rows("SELECT p.*,p.closed OR p.closes_at<=now() AS finished FROM polls p ORDER BY created_at DESC");for(var p:polls){p.put("options",rows("SELECT o.id,o.label,count(v.member_id) AS votes,bool_or(v.member_id=?) AS selected FROM poll_options o LEFT JOIN poll_votes v ON v.option_id=o.id WHERE o.poll_id=? GROUP BY o.id,o.label ORDER BY o.label",member(jwt),p.get("id")));}return polls;}
+ public record PollInput(@NotBlank @Size(max=300) String question,@NotNull @Future Instant closesAt,@NotNull @Size(min=2,max=8) List<@NotBlank @Size(max=160) String> options){}
+ @PostMapping("/polls") @PreAuthorize(MANAGE) @Transactional public Map<String,Object> createPoll(@Valid @RequestBody PollInput r,@AuthenticationPrincipal Jwt jwt){var labels=r.options().stream().map(String::trim).toList();if(new HashSet<>(labels).size()!=labels.size())throw new IllegalArgumentException("Poll choices must be distinct");var p=one("INSERT INTO polls(question,closes_at,created_by) VALUES(?,?,?) RETURNING *",r.question(),Timestamp.from(r.closesAt()),user(jwt));for(String label:labels)db.update("INSERT INTO poll_options(poll_id,label) VALUES(?,?)",p.get("id"),label);return p;}
+ public record VoteInput(@NotNull UUID optionId){}
+ @PostMapping("/polls/{id}/vote") @Transactional public void vote(@PathVariable UUID id,@Valid @RequestBody VoteInput r,@AuthenticationPrincipal Jwt jwt){one("SELECT id FROM polls WHERE id=? AND closed=false AND closes_at>now() FOR UPDATE",id);one("SELECT id FROM members WHERE id=? AND active=true",member(jwt));one("SELECT id FROM poll_options WHERE id=? AND poll_id=?",r.optionId(),id);db.update("INSERT INTO poll_votes(poll_id,member_id,option_id) VALUES(?,?,?) ON CONFLICT(poll_id,member_id) DO UPDATE SET option_id=excluded.option_id,voted_at=now()",id,member(jwt),r.optionId());}
+ @PostMapping("/polls/{id}/close") @PreAuthorize(MANAGE) public void closePoll(@PathVariable UUID id){changed(db.update("UPDATE polls SET closed=true WHERE id=?",id));}
+
+ @GetMapping("/announcements") public List<Map<String,Object>> announcements(@AuthenticationPrincipal Jwt jwt){return rows("SELECT * FROM announcements "+(manager(jwt)?"":"WHERE status='PUBLISHED' ")+"ORDER BY created_at DESC");}
+ public record AnnouncementInput(@NotBlank @Size(max=180) String title,@NotBlank @Size(max=10000) String body,@NotBlank String priority,@NotBlank String status){}
+ private void announcementValid(AnnouncementInput r){choice(r.priority(),"NORMAL","IMPORTANT");choice(r.status(),"DRAFT","PUBLISHED","ARCHIVED");}
+ @PostMapping("/announcements") @PreAuthorize(MANAGE) public Map<String,Object> createAnnouncement(@Valid @RequestBody AnnouncementInput r,@AuthenticationPrincipal Jwt jwt){announcementValid(r);return one("INSERT INTO announcements(title,body,priority,status,created_by) VALUES(?,?,?,?,?) RETURNING *",r.title(),r.body(),r.priority(),r.status(),user(jwt));}
+ @PutMapping("/announcements/{id}") @PreAuthorize(MANAGE) public Map<String,Object> updateAnnouncement(@PathVariable UUID id,@Valid @RequestBody AnnouncementInput r){announcementValid(r);return one("UPDATE announcements SET title=?,body=?,priority=?,status=?,updated_at=now() WHERE id=? RETURNING *",r.title(),r.body(),r.priority(),r.status(),id);}
+}
