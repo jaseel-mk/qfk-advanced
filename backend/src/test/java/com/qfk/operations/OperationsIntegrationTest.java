@@ -99,4 +99,75 @@ class OperationsIntegrationTest {
   db.update("UPDATE matches SET status='REGISTRATION_CLOSED' WHERE id=?",matchId);em.clear();
   mvc.perform(post("/api/public/matches/"+matchId+"/guests").contentType("application/json").content("{\"fullName\":\"Guest\",\"mobile\":\"+97412345670\"}")).andExpect(status().isConflict());
  }
+
+ void putOk(String path,Object body,String role)throws Exception{mvc.perform(put(path).with(as(role)).contentType("application/json").content(json.writeValueAsString(body))).andExpect(status().isOk());}
+ UUID team(String name){UUID id=UUID.randomUUID();db.update("INSERT INTO teams(id,name,short_name,founded_on) VALUES(?,?,?,current_date)",id,name,id.toString().substring(0,8));return id;}
+ UUID tournament(){UUID id=UUID.randomUUID();db.update("INSERT INTO tournaments(id,name,starts_on,ends_on,venue,status) VALUES(?,'Planner test','2099-01-01','2099-01-05','Doha','OPEN')",id);return id;}
+ @Test void commandCenterPersistsGuestLineupResultAndStatistics()throws Exception{
+  UUID registration=UUID.fromString(id(postJson("/api/matches/"+matchId+"/guests","{\"fullName\":\"Matchday guest\",\"mobile\":\"+97400000088\"}","ADMIN")));em.flush();
+  putOk("/api/manage/matches/"+matchId+"/lineup/"+registration,Map.of("side","HOME","position","FORWARD","starter",true),"ADMIN");
+  putOk("/api/manage/matches/"+matchId+"/statistics/"+registration,Map.of("goals",2,"assists",1),"ADMIN");
+  putOk("/api/manage/matches/"+matchId+"/status",Map.of("status","REGISTRATION_CLOSED"),"ADMIN");
+  putOk("/api/manage/matches/"+matchId+"/status",Map.of("status","IN_PROGRESS"),"ADMIN");
+  putOk("/api/manage/matches/"+matchId+"/result",Map.of("homeScore",2,"awayScore",1),"ADMIN");
+  putOk("/api/manage/matches/"+matchId+"/status",Map.of("status","COMPLETED"),"ADMIN");
+  mvc.perform(get("/api/manage/matches/"+matchId).with(as("ADMIN"))).andExpect(jsonPath("$.match.home_score").value(2)).andExpect(jsonPath("$.roster[0].goals").value(2)).andExpect(jsonPath("$.roster[0].side").value("HOME"));
+  mvc.perform(get("/api/manage/statistics").with(as("MEMBER"))).andExpect(status().isOk()).andExpect(jsonPath("$.guests[0].goals").value(2));
+  mvc.perform(put("/api/manage/matches/"+matchId+"/status").with(as("ADMIN")).contentType("application/json").content("{\"status\":\"REGISTRATION_OPEN\"}")).andExpect(status().isConflict());
+ }
+ @Test void balancingIncludesMembersAndGuestsAndPreservesCapacity()throws Exception{
+  postJson("/api/matches/"+matchId+"/registrations","{}","MEMBER");
+  postJson("/api/matches/"+matchId+"/guests","{\"fullName\":\"Balanced guest\",\"mobile\":\"+97400000089\"}","ADMIN");em.flush();
+  postJson("/api/manage/matches/"+matchId+"/balance","{}","ADMIN");
+  assertEquals(1,db.queryForObject("SELECT count(*) FROM match_lineups WHERE side='HOME'",Integer.class));
+  assertEquals(1,db.queryForObject("SELECT count(*) FROM match_lineups WHERE side='AWAY'",Integer.class));
+ }
+ @Test void roleChangesAreAdminOnlyAuditedAndCannotChangeSelf()throws Exception{
+  UUID m=UUID.randomUUID(),u=UUID.randomUUID();db.update("INSERT INTO members(id,full_name,joined_on) VALUES(?,'Other member',current_date)",m);db.update("INSERT INTO user_accounts(id,member_id,email,password_hash,role) VALUES(?,?,?,'unused','MEMBER')",u,m,u+"@test.invalid");
+  mvc.perform(put("/api/manage/members/"+m+"/role").with(as("MEMBER")).contentType("application/json").content("{\"role\":\"ADMIN\"}")).andExpect(status().isForbidden());
+  putOk("/api/manage/members/"+m+"/role",Map.of("role","ORGANIZER"),"ADMIN");
+  assertEquals("ORGANIZER",db.queryForObject("SELECT role FROM user_accounts WHERE id=?",String.class,u));
+  assertEquals(1,db.queryForObject("SELECT count(*) FROM account_role_history WHERE account_id=?",Integer.class,u));
+  mvc.perform(put("/api/manage/members/"+memberId+"/role").with(as("ADMIN")).contentType("application/json").content("{\"role\":\"MEMBER\"}")).andExpect(status().isConflict());
+ }
+ @Test void feeReportsAndReceiptsArePrivateAndDoNotDoubleCountIncome()throws Exception{
+  postJson("/api/matches/"+matchId+"/registrations","{}","MEMBER");em.flush();
+  mvc.perform(get("/api/manage/finance/fees").with(as("MEMBER"))).andExpect(status().isForbidden());
+  mvc.perform(get("/api/manage/finance/fees").with(as("ADMIN"))).andExpect(jsonPath("$[0].outstanding").value(10));
+  var receipt=id(postJson("/api/operations/finance",json.writeValueAsString(Map.of("kind","INCOME","amount",10,"category","Fee","description","Manual collection","occurredOn","2026-10-08","memberId",memberId,"matchId",matchId)),"ADMIN"));
+  mvc.perform(get("/api/manage/finance/"+receipt+"/receipt").with(as("ADMIN"))).andExpect(jsonPath("$.amount").value(10));
+  mvc.perform(get("/api/manage/finance/members/"+memberId).with(as("ADMIN"))).andExpect(jsonPath("$.length()").value(1));
+ }
+ @Test void scheduledTeamPollDraftCanBeEditedButOnlyEligibleMembersVote()throws Exception{
+  UUID t=team("Poll team");var body=new HashMap<String,Object>(Map.of("question","Draft","status","DRAFT","opensAt","2098-01-01T00:00:00Z","closesAt","2099-01-01T00:00:00Z","options",List.of("A","B"),"eligibleTeamId",t));
+  UUID p=UUID.fromString(id(postJson("/api/operations/polls",json.writeValueAsString(body),"ADMIN")));
+  mvc.perform(get("/api/operations/polls").with(as("MEMBER"))).andExpect(jsonPath("$.length()").value(0));body.put("status","OPEN");body.put("question","Published");putOk("/api/operations/polls/"+p,body,"ADMIN");
+  UUID option=db.queryForObject("SELECT id FROM poll_options WHERE poll_id=? AND label='A'",UUID.class,p);
+  mvc.perform(post("/api/operations/polls/"+p+"/vote").with(as("MEMBER")).contentType("application/json").content(json.writeValueAsString(Map.of("optionId",option)))).andExpect(status().isBadRequest());
+  db.update("UPDATE polls SET opens_at=now()-interval '1 minute' WHERE id=?",p);db.update("INSERT INTO team_members(team_id,member_id) VALUES(?,?)",t,memberId);
+  postJson("/api/operations/polls/"+p+"/vote",json.writeValueAsString(Map.of("optionId",option)),"MEMBER");
+  assertEquals(1,db.queryForObject("SELECT count(*) FROM poll_votes WHERE poll_id=?",Integer.class,p));
+ }
+ @Test void targetedScheduledAnnouncementsProducePrivateReadReceipts()throws Exception{
+  UUID t=team("Announcement team");UUID a=UUID.fromString(id(postJson("/api/operations/announcements",json.writeValueAsString(Map.of("title","Team news","body","Only this squad","priority","IMPORTANT","status","PUBLISHED","publishAt","2099-01-01T00:00:00Z","audienceTeamId",t)),"ADMIN")));
+  mvc.perform(get("/api/manage/notifications").with(as("MEMBER"))).andExpect(jsonPath("$.length()").value(0));db.update("UPDATE announcements SET publish_at=now()-interval '1 minute' WHERE id=?",a);
+  mvc.perform(get("/api/manage/notifications").with(as("MEMBER"))).andExpect(jsonPath("$.length()").value(0));db.update("INSERT INTO team_members(team_id,member_id) VALUES(?,?)",t,memberId);
+  mvc.perform(get("/api/manage/notifications").with(as("MEMBER"))).andExpect(jsonPath("$[0].title").value("Team news"));postJson("/api/manage/notifications/"+a+"/read","{}","MEMBER");
+  mvc.perform(get("/api/manage/notifications").with(as("MEMBER"))).andExpect(jsonPath("$[0].read_at").isNotEmpty());
+ }
+ @Test void generatedKnockoutAdvancesOnlyAfterEveryResult()throws Exception{
+  UUID t=tournament();for(int i=0;i<4;i++)db.update("INSERT INTO tournament_teams(tournament_id,team_id) VALUES(?,?)",t,team("Knockout "+i));
+  postJson("/api/manage/tournaments/"+t+"/generate","{\"format\":\"KNOCKOUT\",\"startsAt\":\"2099-01-01T17:00:00Z\",\"intervalMinutes\":60}","ADMIN");
+  mvc.perform(post("/api/manage/tournaments/"+t+"/advance").with(as("ADMIN")).contentType("application/json").content("{\"startsAt\":\"2099-01-02T17:00:00Z\",\"intervalMinutes\":60,\"qualifiersPerGroup\":1}")).andExpect(status().isConflict());
+  db.update("UPDATE tournament_fixtures SET home_score=2,away_score=1 WHERE tournament_id=?",t);
+  postJson("/api/manage/tournaments/"+t+"/advance","{\"startsAt\":\"2099-01-02T17:00:00Z\",\"intervalMinutes\":60,\"qualifiersPerGroup\":1}","ADMIN");
+  assertEquals(3,db.queryForObject("SELECT count(*) FROM tournament_fixtures WHERE tournament_id=?",Integer.class,t));
+  assertEquals(1,db.queryForObject("SELECT count(*) FROM tournament_fixtures WHERE tournament_id=? AND round_number=2",Integer.class,t));
+ }
+ @Test void groupsGenerateOnlyIntraGroupGamesAndAdvanceQualifiers()throws Exception{
+  UUID t=tournament();for(int i=0;i<4;i++){UUID team=team("Group "+i);db.update("INSERT INTO tournament_teams(tournament_id,team_id,group_name) VALUES(?,?,?)",t,team,i<2?"A":"B");}
+  postJson("/api/manage/tournaments/"+t+"/generate","{\"format\":\"GROUP\",\"startsAt\":\"2099-01-01T17:00:00Z\",\"intervalMinutes\":60}","ADMIN");assertEquals(2,db.queryForObject("SELECT count(*) FROM tournament_fixtures WHERE tournament_id=?",Integer.class,t));
+  db.update("UPDATE tournament_fixtures SET home_score=1,away_score=0 WHERE tournament_id=?",t);
+  postJson("/api/manage/tournaments/"+t+"/advance","{\"startsAt\":\"2099-01-02T17:00:00Z\",\"intervalMinutes\":60,\"qualifiersPerGroup\":1}","ADMIN");assertEquals(3,db.queryForObject("SELECT count(*) FROM tournament_fixtures WHERE tournament_id=?",Integer.class,t));
+ }
 }
