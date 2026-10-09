@@ -19,3 +19,5 @@
 
 /* Use the same transparent jersey atlas as the poster. */
 .lb-reference .lb-token>.lb-jersey{display:none}.lb-reference .lb-on-pitch .lb-token>.lb-jersey{display:block;position:relative;width:44px;height:37px;padding:0;background:none;border-radius:0;overflow:hidden;flex-shrink:0}.lb-jersey img{position:absolute;max-width:none;width:227.27%;height:222.22%;left:-7.95%;top:-10%;pointer-events:none}.lb-jersey.away img{width:224.72%;left:-116.4%}.lb-jersey.goalkeeper img{width:224.72%;height:219.78%;top:-114.28%;left:-7.87%}.lb-jersey.away.goalkeeper img{left:-116.85%}.lb-jersey b{position:absolute;top:42%;left:0;width:100%;text-align:center;color:white;text-shadow:0 1px 2px #000;font-size:11px}.lb-jersey.away b,.lb-jersey.goalkeeper.away b{color:#101820;text-shadow:0 1px 1px #fff8}
+
+.cc-player-link{border:0;background:transparent;color:var(--ink);font:inherit;font-weight:700;text-align:left;padding:8px 0;cursor:pointer}.cc-player-link:hover{text-decoration:underline}.cc-player-link:focus-visible{outline:2px solid var(--maroon);outline-offset:3px}.cc-player-dialog .cc-remove-player{color:#a31f35;border-color:#e7b7c0;background:#fff5f6;min-height:44px}
