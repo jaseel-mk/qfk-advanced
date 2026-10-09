@@ -27,6 +27,19 @@ class OperationsIntegrationTest {
  JwtRequestPostProcessor as(String role){return jwt().jwt(j->j.subject(userId.toString()).claim("memberId",memberId.toString()).claim("role",role)).authorities(new SimpleGrantedAuthority("ROLE_"+role));}
  String postJson(String path,String body,String role)throws Exception{return mvc.perform(post(path).with(as(role)).contentType("application/json").content(body)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();}
  String id(String result)throws Exception{return json.readTree(result).get("id").asText();}
+ @Test void adminRemovalPreservesMemberAndPromotesWaitlist()throws Exception{
+  String first=id(postJson("/api/matches/"+matchId+"/members",json.writeValueAsString(Map.of("memberId",memberId)),"ADMIN"));
+  var added=json.readTree(postJson("/api/matches/"+matchId+"/players",json.writeValueAsString(Map.of("names",List.of("Second Player","Waiting One","Waiting Two"))),"ADMIN"));
+  String waiting=added.get(1).get("id").asText();
+  mvc.perform(delete("/api/matches/registrations/"+added.get(0).get("id").asText()).with(as("MEMBER"))).andExpect(status().isForbidden());
+  mvc.perform(delete("/api/matches/registrations/"+first).with(as("ADMIN"))).andExpect(status().isOk());
+  em.flush();
+  assertEquals("CANCELLED",db.queryForObject("SELECT status FROM match_registrations WHERE id=?",String.class,UUID.fromString(first)));
+  assertEquals("CONFIRMED",db.queryForObject("SELECT status FROM match_registrations WHERE id=?",String.class,UUID.fromString(waiting)));
+  assertEquals(1,db.queryForObject("SELECT waitlist_position FROM match_registrations WHERE id=?",Integer.class,UUID.fromString(added.get(2).get("id").asText())));
+  assertEquals(1,db.queryForObject("SELECT count(*) FROM members WHERE id=?",Integer.class,memberId));
+  mvc.perform(delete("/api/matches/registrations/"+first).with(as("ADMIN"))).andExpect(status().isConflict());
+ }
  @Test void adminCanAddNamesWithoutMobileAndOverflowWaitlists()throws Exception{
   mvc.perform(post("/api/matches/"+matchId+"/players").with(as("ADMIN")).contentType("application/json").content(json.writeValueAsString(Map.of("names",List.of(" Ahmed Ali ","Jaseel M","Mohammed K")))))
    .andExpect(status().isOk()).andExpect(jsonPath("$[0].memberName").value("Ahmed Ali")).andExpect(jsonPath("$[0].guestMobile").doesNotExist()).andExpect(jsonPath("$[1].status").value("CONFIRMED")).andExpect(jsonPath("$[2].status").value("WAITLIST")).andExpect(jsonPath("$[2].waitlistPosition").value(1));
