@@ -22,8 +22,8 @@ function NamedPlayersForm({busy,onSave}:{busy:boolean;onSave:(names:string[])=>P
  const [text,setText]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const names=text.split(/\r?\n/).map(n=>n.trim()).filter(Boolean);
  return <form className="ops-form cc-named-players" onSubmit={async e=>{e.preventDefault();setNotice('');if(!names.length||names.length>100||names.some(n=>n.length>160)){setError('Enter 1–100 names, up to 160 characters each.');return}if(new Set(names.map(n=>n.toLowerCase())).size!==names.length){setError('Remove duplicate names from the list.');return}setError('');if(await onSave(names)){setText('');setNotice(`${names.length} player${names.length===1?'':'s'} added. Players beyond match capacity are on the waitlist.`)}}}>
- <h2>Add players by name</h2><p>No mobile number or account needed. Enter one name per line. Use a distinguishing name for players who share a name.</p>
+ <h2>Add players by name</h2><p>No mobile number or account needed. Enter one name per line. Use a distinguishing name for players who share a name. Players can be added before the match starts.</p>
  <label htmlFor="match-player-names">Player names<textarea id="match-player-names" value={text} onChange={e=>{setText(e.target.value);setNotice('')}} rows={7} maxLength={16100} placeholder={'Ahmed Ali\nJaseel M\nMohammed K'} required disabled={busy}/></label>
  <p className="cc-muted">{names.length} / 100 players · Extra players join the waitlist.</p>{error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
- <button className="primary" disabled={busy||!names.length}>{busy?'Adding…':`Add ${names.length||''} player${names.length===1?'':'s'}`}</button></form>
+ <button className="primary" disabled={busy||!names.length}>{`Add ${names.length||''} player${names.length===1?'':'s'}`}</button></form>
 }
