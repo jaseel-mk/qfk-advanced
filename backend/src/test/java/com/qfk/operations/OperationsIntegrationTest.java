@@ -27,6 +27,24 @@ class OperationsIntegrationTest {
  JwtRequestPostProcessor as(String role){return jwt().jwt(j->j.subject(userId.toString()).claim("memberId",memberId.toString()).claim("role",role)).authorities(new SimpleGrantedAuthority("ROLE_"+role));}
  String postJson(String path,String body,String role)throws Exception{return mvc.perform(post(path).with(as(role)).contentType("application/json").content(body)).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();}
  String id(String result)throws Exception{return json.readTree(result).get("id").asText();}
+ @Test void adminCanAddNamesWithoutMobileAndOverflowWaitlists()throws Exception{
+  mvc.perform(post("/api/matches/"+matchId+"/players").with(as("ADMIN")).contentType("application/json").content(json.writeValueAsString(Map.of("names",List.of(" Ahmed Ali ","Jaseel M","Mohammed K")))))
+   .andExpect(status().isOk()).andExpect(jsonPath("$[0].memberName").value("Ahmed Ali")).andExpect(jsonPath("$[0].guestMobile").doesNotExist()).andExpect(jsonPath("$[1].status").value("CONFIRMED")).andExpect(jsonPath("$[2].status").value("WAITLIST")).andExpect(jsonPath("$[2].waitlistPosition").value(1));
+  em.flush();assertEquals(3,db.queryForObject("SELECT count(*) FROM match_registrations WHERE match_id=? AND member_id IS NULL AND guest_mobile IS NULL",Integer.class,matchId));
+  assertEquals("FULL",db.queryForObject("SELECT status FROM matches WHERE id=?",String.class,matchId));
+ }
+ @Test void namedPlayersRejectUnauthorizedDuplicatesAndStartedMatches()throws Exception{
+  String path="/api/matches/"+matchId+"/players";
+  for(String role:List.of("MEMBER","ORGANIZER"))mvc.perform(post(path).with(as(role)).contentType("application/json").content("{\"names\":[\"A\"]}")).andExpect(status().isForbidden());
+  mvc.perform(post(path).with(as("ADMIN")).contentType("application/json").content("{\"names\":[\"A\",\" a \"]}")).andExpect(status().isBadRequest());
+  mvc.perform(post(path).with(as("ADMIN")).contentType("application/json").content("{\"names\":[\" \"]}")).andExpect(status().isBadRequest());
+  postJson(path,"{\"names\":[\"Existing\"]}","ADMIN");em.flush();
+  mvc.perform(post(path).with(as("ADMIN")).contentType("application/json").content("{\"names\":[\"New\",\"existing\"]}")).andExpect(status().isConflict());
+  assertEquals(1,db.queryForObject("SELECT count(*) FROM match_registrations WHERE match_id=?",Integer.class,matchId));
+  db.update("UPDATE matches SET status='IN_PROGRESS' WHERE id=?",matchId);em.clear();
+  mvc.perform(post(path).with(as("ADMIN")).contentType("application/json").content("{\"names\":[\"Another\"]}")).andExpect(status().isConflict());
+  mvc.perform(post("/api/matches/"+matchId+"/guests").with(as("ADMIN")).contentType("application/json").content("{\"fullName\":\"Public guest\"}")).andExpect(status().isBadRequest());
+ }
  @Test void memberCannotReadPrivateOrMutateAdminSections()throws Exception{
   mvc.perform(get("/api/operations/members").with(as("MEMBER"))).andExpect(status().isForbidden());
   mvc.perform(get("/api/operations/finance").with(as("ORGANIZER"))).andExpect(status().isForbidden());
