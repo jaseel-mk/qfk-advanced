@@ -213,4 +213,13 @@ class OperationsIntegrationTest {
   mvc.perform(put("/api/manage/matches/"+matchId+"/builder").with(as("ADMIN")).contentType("application/json").content(json.writeValueAsString(body))).andExpect(status().isBadRequest());assertEquals(0,db.queryForObject("SELECT count(*) FROM match_lineups",Integer.class));
  }
 
+
+ @Test void namedPositionShortFormsPersistAndDuplicateBaseNamesAreRejected()throws Exception{
+  String path="/api/matches/"+matchId+"/players";
+  postJson(path,json.writeValueAsString(Map.of("names",List.of("Keeper gk","Defender - DF","Midfielder (MD)","Striker, fd","Flexible Player"))),"ADMIN");em.flush();
+  for(var entry:Map.of("Keeper","GOALKEEPER","Defender","DEFENDER","Midfielder","MIDFIELDER","Striker","FORWARD","Flexible Player","UTILITY").entrySet())assertEquals(entry.getValue(),db.queryForObject("SELECT preferred_position FROM match_registrations WHERE match_id=? AND guest_name=?",String.class,matchId,entry.getKey()));
+  mvc.perform(get("/api/manage/matches/"+matchId).with(as("ADMIN"))).andExpect(status().isOk()).andExpect(jsonPath("$.roster[0].preferred_position").value("GOALKEEPER"));
+  mvc.perform(post(path).with(as("ADMIN")).contentType("application/json").content(json.writeValueAsString(Map.of("names",List.of("Same GK","same DF"))))).andExpect(status().isBadRequest());
+  assertEquals(5,db.queryForObject("SELECT count(*) FROM match_registrations WHERE match_id=?",Integer.class,matchId));
+ }
 }
