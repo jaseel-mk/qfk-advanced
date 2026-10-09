@@ -45,6 +45,13 @@ class OperationsIntegrationTest {
   mvc.perform(post(path).with(as("ADMIN")).contentType("application/json").content("{\"names\":[\"Another\"]}")).andExpect(status().isConflict());
   mvc.perform(post("/api/matches/"+matchId+"/guests").with(as("ADMIN")).contentType("application/json").content("{\"fullName\":\"Public guest\"}")).andExpect(status().isBadRequest());
  }
+ @Test void customFormationAndEightPlayerTeamsPersist()throws Exception{
+  var body=new HashMap<String,Object>(Map.of("starterLimit",8,"homeName","Home","awayName","Away","homeColor","#801735","awayColor","#475463","players",List.of(),"homeFormation","2-2-3","awayFormation","3-2-2"));
+  putOk("/api/manage/matches/"+matchId+"/builder",body,"ADMIN");
+  mvc.perform(get("/api/manage/matches/"+matchId+"/builder").with(as("ADMIN"))).andExpect(jsonPath("$.starter_limit").value(8)).andExpect(jsonPath("$.home_formation").value("2-2-3")).andExpect(jsonPath("$.away_formation").value("3-2-2"));
+  body.put("homeFormation","4-4-2");mvc.perform(put("/api/manage/matches/"+matchId+"/builder").with(as("ADMIN")).contentType("application/json").content(json.writeValueAsString(body))).andExpect(status().isBadRequest());
+  assertEquals("2-2-3",db.queryForObject("SELECT home_formation FROM match_lineup_settings WHERE match_id=?",String.class,matchId));
+ }
  @Test void memberCannotReadPrivateOrMutateAdminSections()throws Exception{
   mvc.perform(get("/api/operations/members").with(as("MEMBER"))).andExpect(status().isForbidden());
   mvc.perform(get("/api/operations/finance").with(as("ORGANIZER"))).andExpect(status().isForbidden());
